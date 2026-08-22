@@ -81,6 +81,90 @@ SECUENCIA5:
 
   rjmp SECUENCIA5
 
+SECUENCIA6:
+  ldi r17, 0b00000001
+  out PORTD, r17
+  rcall RETARDO
+
+  ldi, r17, 0b00000011
+  out PORTD, r17
+  rcall RETARDO
+
+  ldi, r17, 0b00000111
+  out PORTD, r17
+  rcall RETARDO
+
+  ldi, r17, 0b00001111
+  out PORTD, r17
+  rcall RETARDO
+
+  ldi, r17, 0b00011111
+  out PORTD, r17
+  rcall RETARDO
+
+  ldi, r17, 0b00111111
+  out PORTD, r17
+  rcall RETARDO
+
+  ldi, r17, 0b01111111
+  out PORTD, r17
+  rcall RETARDO
+
+  ldi, r17, 0b11111111
+  out PORTD, r17
+  rcall RETARDO
+
+  rjmp SECUENCIA6
+
+SECUENCIA7:
+  ldi, r17, 0b11111111
+  out PORTD, r17
+  rcall RETARDO
+
+  ldi, r17, 0b01111111
+  out PORTD, r17
+  rcall RETARDO
+
+  ldi, r17, 0b00111111
+  out PORTD, r17
+  rcall RETARDO
+
+  ldi, r17, 0b00011111
+  out PORTD, r17
+  rcall RETARDO
+
+  ldi, r17, 0b00001111
+  out PORTD, r17
+  rcall RETARDO
+
+  ldi, r17, 0b00000111
+  out PORTD, r17
+  rcall RETARDO
+
+  ldi, r17, 0b00000011
+  out PORTD, r17
+  rcall RETARDO
+
+  ldi r17, 0b00000001
+  out PORTD, r17
+  rcall RETARDO
+
+  rjmp SECUENCIA7
+
+SECUENCIA8:
+  ldi, r17, 0b11111111
+  out PORTD, r17
+  rcall RETARDO
+
+  ldi, r17, 0b00000000
+  out PORTD, r17
+  rcall RETARDO
+
+  rjmp RETARDO
+
+
+  
+
 
 
 
