@@ -8,6 +8,16 @@ INICIO:
   ldi r16, 0xFF
   out DDRD, r16
 
+  ; PB0, PB1 y PB2 como entradas
+  cbi DDRB, PB0
+  cbi DDRB, PB1
+  bi DDRB, PB2
+  
+  ; Pull-up interno de los tres botones 
+  sbi PORTB, PB0
+  sbi PORTB, PB1
+  sbi PORTB, PB2
+
   ldi r17, 0b00000001
 
 SECUENCIA1:
