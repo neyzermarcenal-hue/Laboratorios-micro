@@ -1,0 +1,42 @@
+.include "m328pdef .inc"
+
+.cseg
+.org 0x0000
+  rjmp INICIO
+
+INICIO:
+  ldi r16, 0xFF
+  out DDRD, r16
+
+  ldi r17, 0b00000001
+
+SECUENCIA1:
+  out PORTD, r17
+  rcall RETARDO
+
+  lsl r17
+  brne SECUENCIA1
+
+  ldi r17, ob00000001
+  rjm SECUENCIA 1
+
+RETARDO:
+  ldi r18, 20
+
+RETARDO1:
+   ldi r19, 255
+
+RETARDO2:
+  ldi r20, 255
+
+RETARDO3:
+  dec r20
+  brne RETARDO3
+
+  dec r19
+  brne RETARDO2
+
+  dec r18
+  brne RETARDO1
+
+  ret
