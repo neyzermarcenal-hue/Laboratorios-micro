@@ -163,10 +163,66 @@ SECUENCIA8:
   rjmp RETARDO
 
 
-  
+; =========================================================
+; LECTURA DE BOTONES
+; =========================================================
+
+LEER_BOTONES:
+
+    sbic PINB, PB0
+    rjmp REVISAR_BOTON2
+
+    inc r21
+
+    ; Si pasó de 8, volver a 1
+    cpi r21, 9
+    brne ESPERAR_B1
+
+    ldi r21, 1
+
+ESPERAR_B1:
+    sbis PINB, PB0
+    rjmp ESPERAR_B1
+
+    ret
+
+REVISAR_BOTON2:
+
+    sbic PINB, PB1
+    rjmp REVISAR_BOTON3
+
+    dec r21
+
+    ; Si bajó de 1, volver a 8
+    cpi r21, 0
+    brne ESPERAR_B2
+
+    ldi r21, 8
+
+ESPERAR_B2:
+    sbis PINB, PB1
+    rjmp ESPERAR_B2
+
+    ret
+
+REVISAR_BOTON3:
+
+    sbic PINB, PB2
+    rjmp FIN_BOTONES
+
+    ldi r21, 1
+
+ESPERAR_B3:
+    sbis PINB, PB2
+    rjmp ESPERAR_B3
 
 
+FIN_BOTONES:
+    ret
 
+; =========================================================
+; RETARDO
+; =========================================================
 
 RETARDO:
   ldi r18, 20
