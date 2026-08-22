@@ -62,6 +62,25 @@ SECUENCIA4:
 
   rjmp SECUENCIA4
 
+SECUENCIA5:
+  ldi r17, 0b00011000
+  out PORTD, r17
+  rcall RETARDO
+
+  ldi r17, 0B00100100
+  out PORTD, r17
+  rcall RETARDO
+
+  ldi r17, 0b01000010
+  out PORTD, r17
+  rcall RETARDO
+
+  ldi r17, 0b10000001
+  out PORTD, r17
+  rcall RETARDO
+
+  rjmp SECUENCIA5
+
 
 
 
