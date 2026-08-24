@@ -39,39 +39,60 @@ loop:
 
 OP_CLEAR:
 	CLR R19					; Pone el registro en 0
+	RJMP FLAGS
 	RJMP loop				; Termina la operacion y va al loop
 
 OP_SUB:
 	MOV R19, R16			; Copio A en R19 para no cambiar el valor inicial de R16
 	SUB R19, R17			; R19 = A - B
+	RJMP FLAGS
 	RJMP loop
 
 OP_ADD:
 	MOV R19, R16
 	ADD R19, R17			; R19 = A + B
+	RJMP FLAGS
 	RJMP loop
 
 OP_XOR:
 	MOV R19, R16
 	EOR R19, R17			; R19 = A XOR B
+	RJMP FLAGS
 	RJMP loop
 
 OP_AND:
     MOV R19, R16
     AND R19, R17			; R19 = A * B
-    RJMP loop
+    RJMP FLAGS
+	RJMP loop
 
 OP_OR:
     MOV R19, R16
     OR R19, R17				; R19 = A + B
-    RJMP loop
+    RJMP FLAGS
+	RJMP loop
 
 OP_SHL:
     MOV R19, R16
     LSL R19					; R19 desplaza un bit a la izquierda, 0101 pasa a 1010
-    RJMP loop
+    RJMP FLAGS
+	RJMP loop
 
 OP_INC:
     MOV R19, R16
     INC R19					; R19 incrementa 1
-    RJMP loop
+    RJMP FLAGS
+	RJMP loop
+
+
+FLAGS:
+    CLR R20					; Limpia el registro de banderas (C, N y Z = 0)
+
+	TST R19					; Comprueba si el resultado R19 es cero / tambien puedo usar CPI R19, 0
+	BREQ SET_ZERO			; Si R19 = 0, salta a SET_ZERO
+	RJMP loop				; Si no es cero, termina y va al loop
+
+
+SET_ZERO:
+	ORI R20, ob00000010		; Pone en 1 en Z (bit 1 de R20)
+	RJMP loop
