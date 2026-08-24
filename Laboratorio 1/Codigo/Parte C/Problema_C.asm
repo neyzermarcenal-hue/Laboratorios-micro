@@ -1,4 +1,4 @@
-.include "m328pdef .inc"
+.include "m328pdef.inc"
 
 .cseg
 .org 0x0000
@@ -11,7 +11,7 @@ INICIO:
   ; PB0, PB1 y PB2 como entradas
   cbi DDRB, PB0
   cbi DDRB, PB1
-  bi DDRB, PB2
+  cbi DDRB, PB2
   
   ; Pull-up interno de los tres botones 
   sbi PORTB, PB0
@@ -99,7 +99,7 @@ BUCLE_S2:
   lsr r17
   brne BUCLE_S2
 
-  rjmp SECUENCIA 2
+  rjmp SECUENCIA2
 
 IR_SELECTOR_S2:
   rjmp SELECTOR
@@ -131,7 +131,7 @@ SECUENCIA4:
 
   rcall LEER_BOTONES
   cpi r21, 4
-  brne IR_SELECTORS4
+  brne IR_SELECTOR_S4
 
   ldi r17, 0b01000010
   out PORTD, r17
@@ -139,7 +139,7 @@ SECUENCIA4:
 
   rcall LEER_BOTONES
   cpi r21, 4
-  brne IR_SELECTORS4
+  brne IR_SELECTOR_S4
 
   ldi r17, 0b00100100
   out PORTD, r17
@@ -147,7 +147,7 @@ SECUENCIA4:
 
   rcall LEER_BOTONES
   cpi r21, 4
-  brne IR_SELECTORS4
+  brne IR_SELECTOR_S4
 
   ldi r17, 0b00011000
   out PORTD, r17
@@ -206,7 +206,7 @@ SECUENCIA6:
   cpi r21, 6
   brne IR_SELECTOR_S6
 
-  ldi, r17, 0b00000011
+  ldi r17, 0b00000011
   out PORTD, r17
   rcall RETARDO
 
@@ -214,7 +214,7 @@ SECUENCIA6:
   cpi r21, 6
   brne IR_SELECTOR_S6
 
-  ldi, r17, 0b00000111
+  ldi r17, 0b00000111
   out PORTD, r17
   rcall RETARDO
 
@@ -222,7 +222,7 @@ SECUENCIA6:
   cpi r21, 6
   brne IR_SELECTOR_S6
 
-  ldi, r17, 0b00001111
+  ldi r17, 0b00001111
   out PORTD, r17
   rcall RETARDO
 
@@ -230,7 +230,7 @@ SECUENCIA6:
   cpi r21, 6
   brne IR_SELECTOR_S6
 
-  ldi, r17, 0b00011111
+  ldi r17, 0b00011111
   out PORTD, r17
   rcall RETARDO
 
@@ -238,7 +238,7 @@ SECUENCIA6:
   cpi r21, 6
   brne IR_SELECTOR_S6
 
-  ldi, r17, 0b00111111
+  ldi r17, 0b00111111
   out PORTD, r17
   rcall RETARDO
 
@@ -246,7 +246,7 @@ SECUENCIA6:
   cpi r21, 6
   brne IR_SELECTOR_S6
 
-  ldi, r17, 0b01111111
+  ldi r17, 0b01111111
   out PORTD, r17
   rcall RETARDO
 
@@ -254,7 +254,7 @@ SECUENCIA6:
   cpi r21, 6
   brne IR_SELECTOR_S6
 
-  ldi, r17, 0b11111111
+  ldi r17, 0b11111111
   out PORTD, r17
   rcall RETARDO
 
@@ -266,7 +266,7 @@ IR_SELECTOR_S6:
   rjmp SELECTOR
 
 SECUENCIA7:
-  ldi, r17, 0b11111111
+  ldi r17, 0b11111111
   out PORTD, r17
   rcall RETARDO
 
@@ -274,7 +274,7 @@ SECUENCIA7:
   cpi r21, 7
   brne IR_SELECTOR_S7
 
-  ldi, r17, 0b01111111
+  ldi r17, 0b01111111
   out PORTD, r17
   rcall RETARDO
 
@@ -282,7 +282,7 @@ SECUENCIA7:
   cpi r21, 7
   brne IR_SELECTOR_S7
 
-  ldi, r17, 0b00111111
+  ldi r17, 0b00111111
   out PORTD, r17
   rcall RETARDO
 
@@ -290,7 +290,7 @@ SECUENCIA7:
   cpi r21, 7
   brne IR_SELECTOR_S7
 
-  ldi, r17, 0b00011111
+  ldi r17, 0b00011111
   out PORTD, r17
   rcall RETARDO
 
@@ -298,7 +298,7 @@ SECUENCIA7:
   cpi r21, 7
   brne IR_SELECTOR_S7
 
-  ldi, r17, 0b00001111
+  ldi r17, 0b00001111
   out PORTD, r17
   rcall RETARDO
 
@@ -306,7 +306,7 @@ SECUENCIA7:
   cpi r21, 7
   brne IR_SELECTOR_S7
 
-  ldi, r17, 0b00000111
+  ldi r17, 0b00000111
   out PORTD, r17
   rcall RETARDO
 
@@ -314,7 +314,7 @@ SECUENCIA7:
   cpi r21, 7
   brne IR_SELECTOR_S7
 
-  ldi, r17, 0b00000011
+  ldi r17, 0b00000011
   out PORTD, r17
   rcall RETARDO
 
@@ -334,7 +334,7 @@ IR_SELECTOR_S7:
   rjmp SELECTOR
 
 SECUENCIA8:
-  ldi, r17, 0b11111111
+  ldi r17, 0b11111111
   out PORTD, r17
   rcall RETARDO
 
@@ -342,7 +342,7 @@ SECUENCIA8:
   cpi r21, 8
   brne IR_SELECTOR_S8
 
-  ldi, r17, 0b00000000
+  ldi r17, 0b00000000
   out PORTD, r17
   rcall RETARDO
 
@@ -350,7 +350,7 @@ SECUENCIA8:
   cpi r21, 8
   breq SECUENCIA8
 
-IR_SELECTOR_S8
+IR_SELECTOR_S8:
   rjmp SELECTOR
 
 ; =========================================================
