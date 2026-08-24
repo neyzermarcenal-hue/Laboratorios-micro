@@ -65,14 +65,17 @@ SELECTOR8:
 
 
 SECUENCIA1:
+  ldi r17, 0b00000001
+
+BUCLE_S1:
   out PORTD, r17
   rcall RETARDO
 
-  lsl LEER_BOTONES
+  rcall LEER_BOTONES
   cpi r21, 1
   brne IR_SELECTOR_S1
 
-  ldi r17
+  lsl r17
 
   ;si llegó a cero, reiniciar patrón
   brne BUCLE_S1
