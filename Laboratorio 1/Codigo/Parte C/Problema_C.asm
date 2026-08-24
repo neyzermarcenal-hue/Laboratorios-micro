@@ -24,7 +24,6 @@ INICIO:
   rjmp SELECTOR
 
 SELECTOR:
-
     cpi r21, 1
     brne SELECTOR2
     rjmp SECUENCIA1
