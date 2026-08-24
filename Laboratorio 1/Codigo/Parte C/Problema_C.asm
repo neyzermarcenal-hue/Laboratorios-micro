@@ -18,14 +18,59 @@ INICIO:
   sbi PORTB, PB1
   sbi PORTB, PB2
 
-  ldi r17, 0b00000001
+  ldi r21, 1
+
+  rjmp SELECTOR
+
+SELECTOR:
+
+    cpi r21, 1
+    brne SELECTOR2
+    rjmp SECUENCIA1
+
+SELECTOR2:
+    cpi r21, 2
+    brne SELECTOR3
+    rjmp SECUENCIA2
+
+SELECTOR3:
+    cpi r21, 3
+    brne SELECTOR4
+    rjmp SECUENCIA3
+
+SELECTOR4:
+    cpi r21, 4
+    brne SELECTOR5
+    rjmp SECUENCIA4
+
+SELECTOR5:
+    cpi r21, 5
+    brne SELECTOR6
+    rjmp SECUENCIA5
+
+SELECTOR6:
+    cpi r21, 6
+    brne SELECTOR7
+    rjmp SECUENCIA6
+
+SELECTOR7:
+    cpi r21, 7
+    brne SELECTOR8
+    rjmp SECUENCIA7
+
+SELECTOR8:
+    cpi r21, 8
+    brne SELECTOR
+    rjmp SECUENCIA8
+
 
 SECUENCIA1:
   out PORTD, r17
   rcall RETARDO
 
-  lsl r17
-  brne SECUENCIA1
+  lsl LEER_BOTONES
+  cpi r21, 1
+  brne IR_SELECTOR_S1
 
   ldi r17, 0b00000001
   rjmp SECUENCIA1
