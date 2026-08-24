@@ -1,12 +1,39 @@
 .include "m328pdef.inc"		; definiciones del atmega
 
-.org 0x0000					; para comenzar el programa en la direccion reset
+.org 0x0000						; para comenzar el programa en la direccion reset
 
 main:
 
-	LDI R16, 15				; R16 = A = 5
-	LDI R17, 1				; R17 = B = 3
-	LDI R18, 2				; R18 = S = 2 , es la operacion ADD
+	LDI R21, 0b00000000			; Los 0 son entradas	
+    OUT DDRD, R21				; Todo el PORTD como entrada: A y B
+
+    LDI R21, 0b00000000
+    OUT DDRC, R21             ; PORTC como entrada para leer S
+
+
+
+
+loop:
+
+	; LEER A Y B
+
+    IN R21, PIND              ; Lee los 8 switches de PORTD
+
+    MOV R16, R21              ; Copia el puerto para obtener A
+    ANDI R16, 0b00001111      ; Conserva PD0-PD3 -> A
+
+    MOV R17, R21              ; Copia nuevamente el puerto para obtener B
+    SWAP R17                  ; Intercambia los 4 bits altos con los bajos
+    ANDI R17, 0b00001111      ; Conserva B en los bits 0-3
+
+
+    ; LEER S
+
+    IN R18, PINC              ; Lee PORTC
+    ANDI R18, 0b00000111      ; Conserva solamente PC0-PC2 -> S
+
+
+
 
 
 	CPI R18, 0				; Compara S con 0
@@ -33,10 +60,6 @@ main:
 	CPI R18, 7
 	BREQ OP_INC
 
-
-
-loop:
-	RJMP loop
 
 
 
