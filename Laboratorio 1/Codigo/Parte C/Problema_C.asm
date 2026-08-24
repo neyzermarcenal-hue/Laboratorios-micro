@@ -18,6 +18,7 @@ INICIO:
   sbi PORTB, PB1
   sbi PORTB, PB2
 
+  ; Comienza por la Secuencia 1
   ldi r21, 1
 
   rjmp SELECTOR
@@ -358,7 +359,6 @@ IR_SELECTOR_S8
 ; =========================================================
 
 LEER_BOTONES:
-
     sbic PINB, PB0
     rjmp REVISAR_BOTON2
 
@@ -377,7 +377,6 @@ ESPERAR_B1:
     ret
 
 REVISAR_BOTON2:
-
     sbic PINB, PB1
     rjmp REVISAR_BOTON3
 
@@ -396,7 +395,6 @@ ESPERAR_B2:
     ret
 
 REVISAR_BOTON3:
-
     sbic PINB, PB2
     rjmp FIN_BOTONES
 
