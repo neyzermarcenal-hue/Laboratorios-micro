@@ -2,20 +2,36 @@
 
 .org 0x0000						; para comenzar el programa en la direccion reset
 
+
+; ORGANIZACION DE REGISTROS
+
+; R16 = A
+; R17 = B
+; R18 = S
+; R19 = Resultado F
+; R20 = Banderas -> 00000NZC
+; R21 = Registro auxiliar
+
+
+
 main:
+
+	; CONFIGURACION DE ENTRADAS
 
 	LDI R21, 0b00000000			; Los 0 son entradas	
     OUT DDRD, R21				; Todo el PORTD como entrada: A y B
 
-    LDI R21, 0b00000000
-    OUT DDRC, R21             ; PORTC como entrada para leer S
+    LDI R21, 0b00111000              ; PC3-PC5 salida / PC0-PC2 entrada
+    OUT DDRC, R21                    ; PC0-PC2 leen S y PC3-PC5 muestran S
 
+	LDI R21, 0b00111111          ; PB0-PB5 serán salidas
+    OUT DDRB, R21                ; Configura resultado F, Carry y Zero como salidas
 
 
 
 loop:
 
-	; LEER A Y B
+	; LEER A Y B DESDE PORTD
 
     IN R21, PIND              ; Lee los 8 switches de PORTD
 
@@ -27,13 +43,13 @@ loop:
     ANDI R17, 0b00001111      ; Conserva B en los bits 0-3
 
 
-    ; LEER S
+    ; LEER S DESDE PORTC
 
     IN R18, PINC              ; Lee PORTC
     ANDI R18, 0b00000111      ; Conserva solamente PC0-PC2 -> S
 
 
-
+	; SELECCION DE LA OPERACION
 
 
 	CPI R18, 0				; Compara S con 0
@@ -61,7 +77,9 @@ loop:
 	BREQ OP_INC
 
 
+	RJMP loop
 
+	; OPERACIONES DE LA ALU
 
 OP_CLEAR:
 	CLR R19					; Pone el registro en 0
@@ -84,12 +102,12 @@ OP_XOR:
 
 OP_AND:
     MOV R19, R16
-    AND R19, R17			; R19 = A * B
+    AND R19, R17			; R19 = A AND B
     RJMP FLAGS
 
 OP_OR:
     MOV R19, R16
-    OR R19, R17				; R19 = A + B
+    OR R19, R17				; R19 = A OR B
     RJMP FLAGS
 
 OP_SHL:
@@ -167,4 +185,53 @@ NEGATIVO:
     ORI R20, 0b00000100             ; Si el bit 3 es 1 -> N = 1 (bit 2 de R20)
 
 
-	RJMP loop                       ; Termina la prueba y queda en el loop
+
+
+SALIDAS:
+	
+						; --------------------------------------------------------
+						; Resultado F + Carry + Zero en PORTB
+									
+						; PB5 PB4 PB3 PB2 PB1 PB0
+						;  Z   C  F3  F2  F1  F0
+						;          ?
+						;          N también corresponde a F3
+						; --------------------------------------------------------
+
+
+	MOV R21, R19                     ; Empieza copiando F0-F3 en R21
+
+
+
+	SBRC R20, 0                      ; Si C = 0, salta la próxima instrucción
+    ORI R21, 0b00010000              ; Si C = 1, activa PB4
+
+
+    SBRC R20, 1                      ; Si Z = 0, salta la próxima instrucción
+    ORI R21, 0b00100000              ; Si Z = 1, activa PB5
+
+
+    OUT PORTB, R21                   ; Envía resultado, Carry y Zero a los leds
+
+
+
+
+						; --------------------------------------------------------
+						; Mostrar operación seleccionada
+
+						; PC5 PC4 PC3
+						;  S2  S1  S0
+						; --------------------------------------------------------							
+
+
+	MOV R21, R18                     ; Copia el código S
+
+    LSL R21                          ; Desplaza S una posición
+    LSL R21                          ; Desplaza S otra posición
+    LSL R21                          ; S pasa de bits 0-2 a bits 3-5
+
+    OUT PORTC, R21                   ; Muestra S en PC3-PC5
+
+
+
+	RJMP loop						 ; Vuelve a leer continuamente A, B y S
