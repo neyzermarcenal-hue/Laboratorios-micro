@@ -11,7 +11,7 @@
 ; R19 = Resultado F
 ; R20 = Banderas -> 00000NZC
 ; R21 = Registro auxiliar
-
+; R22 = Auxiliar para invertir A0
 
 
 main:
@@ -35,12 +35,15 @@ loop:
 
     IN R21, PIND              ; Lee los 8 switches de PORTD
 
-    MOV R16, R21              ; Copia el puerto para obtener A
-    ANDI R16, 0b00001111      ; Conserva PD0-PD3 -> A
+	MOV R16, R21              ; Copia el puerto para obtener A
+	ANDI R16, 0b00001111      ; Conserva PD0-PD3 -> A
 
-    MOV R17, R21              ; Copia nuevamente el puerto para obtener B
-    SWAP R17                  ; Intercambia los 4 bits altos con los bajos
-    ANDI R17, 0b00001111      ; Conserva B en los bits 0-3
+	LDI R22, 0b00000001       ; Carga una máscara que apunta solamente al bit A0
+	EOR R16, R22              ; Invierte solo A0 porque físicamente ahora usa pull-up
+
+	MOV R17, R21              ; Copia nuevamente el puerto para obtener B
+	SWAP R17                  ; Baja B desde bits 7-4 hacia bits 3-0
+	ANDI R17, 0b00001111      ; Conserva solamente B
 
 
     ; LEER S DESDE PORTC
