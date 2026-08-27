@@ -1,0 +1,50 @@
+<ASSEMBLER_INFO>
+ <VERSION>2.2.8</VERSION>
+ <DEVICE>"ATmega328P"</DEVICE>
+ <WORKING_DIR>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\Debug</WORKING_DIR>
+ <INCLUDE_PATH>
+  <DIR>C:/Program Files (x86)\Atmel\Studio\7.0\Packs\atmel\ATmega_DFP\1.7.374\avrasm\inc</DIR>
+  <DIR>C:\Program Files (x86)\Atmel\Studio\7.0\toolchain\avr8\avrassembler\Include</DIR>
+  <DIR></DIR>
+ </INCLUDE_PATH>
+ <SOURCE_FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\main.asm</SOURCE_FILE>
+ <INCLUDED_FILES>
+  <FILE>C:/Program Files (x86)\Atmel\Studio\7.0\Packs\atmel\ATmega_DFP\1.7.374\avrasm\inc\m328Pdef.inc</FILE>
+  <FILE>C:/Program Files (x86)\Atmel\Studio\7.0\Packs\atmel\ATmega_DFP\1.7.374\avrasm\inc\m328pdef.inc</FILE>
+ </INCLUDED_FILES>
+ <OBJECT_FILES>
+  <FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\Debug\Lab1_ParteB.obj</FILE>
+ </OBJECT_FILES>
+ <HEX_FILES>
+  <FILE>Lab1_ParteB.hex</FILE>
+ </HEX_FILES>
+ <OUTPUT_FILES>
+  <FILE>Lab1_ParteB.map</FILE>
+  <FILE>Lab1_ParteB.lss</FILE>
+ </OUTPUT_FILES>
+ <LABELS>
+  <inicio><FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\main.asm</FILE><LINE>5</LINE></inicio>
+  <actualizar_display><FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\main.asm</FILE><LINE>85</LINE></actualizar_display>
+  <loop><FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\main.asm</FILE><LINE>36</LINE></loop>
+  <boton_inc><FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\main.asm</FILE><LINE>50</LINE></boton_inc>
+  <boton_dec><FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\main.asm</FILE><LINE>62</LINE></boton_dec>
+  <boton_reset><FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\main.asm</FILE><LINE>74</LINE></boton_reset>
+  <esperar_soltar_inc><FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\main.asm</FILE><LINE>56</LINE></esperar_soltar_inc>
+  <retardo><FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\main.asm</FILE><LINE>130</LINE></retardo>
+  <esperar_soltar_dec><FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\main.asm</FILE><LINE>68</LINE></esperar_soltar_dec>
+  <esperar_soltar_reset><FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\main.asm</FILE><LINE>78</LINE></esperar_soltar_reset>
+  <mostrar_0><FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\main.asm</FILE><LINE>108</LINE></mostrar_0>
+  <mostrar_1><FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\main.asm</FILE><LINE>110</LINE></mostrar_1>
+  <mostrar_2><FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\main.asm</FILE><LINE>112</LINE></mostrar_2>
+  <mostrar_3><FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\main.asm</FILE><LINE>114</LINE></mostrar_3>
+  <mostrar_4><FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\main.asm</FILE><LINE>116</LINE></mostrar_4>
+  <mostrar_5><FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\main.asm</FILE><LINE>118</LINE></mostrar_5>
+  <mostrar_6><FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\main.asm</FILE><LINE>120</LINE></mostrar_6>
+  <mostrar_7><FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\main.asm</FILE><LINE>122</LINE></mostrar_7>
+  <mostrar_8><FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\main.asm</FILE><LINE>124</LINE></mostrar_8>
+  <mostrar_9><FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\main.asm</FILE><LINE>126</LINE></mostrar_9>
+  <delay_ext><FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\main.asm</FILE><LINE>132</LINE></delay_ext>
+  <delay_mid><FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\main.asm</FILE><LINE>134</LINE></delay_mid>
+  <delay_int><FILE>C:\Users\cvarg\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte B\Lab1_ParteB\main.asm</FILE><LINE>136</LINE></delay_int>
+ </LABELS>
+</ASSEMBLER_INFO>
