@@ -1,5 +1,5 @@
 
-AVRASM ver. 2.2.8  C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\main.asm Sun Aug 30 05:46:38 2026
+AVRASM ver. 2.2.8  C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm Sun Aug 30 08:28:07 2026
 
 
 EQU  SIGNATURE_000 0000001e
@@ -695,4 +695,13 @@ EQU  ACIaddr      0000002e
 EQU  TWIaddr      00000030
 EQU  SPMRaddr     00000032
 EQU  INT_VECTORS_SIZE 00000034
-CSEG start        00000000
+DEF  temp         r16
+DEF  carga        r17
+CSEG INICIO       00000001
+CSEG LISTO        00000013
+CSEG CAMBIAR_CARGA 00000016
+CSEG ESPERA_CARGA 00000016
+CSEG ACTUALIZAR_CARGA 0000001c
+CSEG MOSTRAR_LIGERA 00000027
+CSEG MOSTRAR_MEDIA 00000025
+CSEG MOSTRAR_PESADA 00000023

@@ -7,9 +7,10 @@
   <DIR>C:\Program Files (x86)\Atmel\Studio\7.0\toolchain\avr8\avrassembler\Include</DIR>
   <DIR></DIR>
  </INCLUDE_PATH>
- <SOURCE_FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\main.asm</SOURCE_FILE>
+ <SOURCE_FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</SOURCE_FILE>
  <INCLUDED_FILES>
   <FILE>C:/Program Files (x86)\Atmel\Studio\7.0\Packs\atmel\ATmega_DFP\1.7.374\avrasm\inc\m328Pdef.inc</FILE>
+  <FILE>C:/Program Files (x86)\Atmel\Studio\7.0\Packs\atmel\ATmega_DFP\1.7.374\avrasm\inc\m328pdef.inc</FILE>
  </INCLUDED_FILES>
  <OBJECT_FILES>
   <FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Debug\Parte A - Lavardora.obj</FILE>
@@ -22,6 +23,13 @@
   <FILE>Parte A - Lavardora.lss</FILE>
  </OUTPUT_FILES>
  <LABELS>
-  <start><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\main.asm</FILE><LINE>10</LINE></start>
+  <INICIO><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>18</LINE></INICIO>
+  <LISTO><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>89</LINE></LISTO>
+  <CAMBIAR_CARGA><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>97</LINE></CAMBIAR_CARGA>
+  <ESPERA_CARGA><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>101</LINE></ESPERA_CARGA>
+  <ACTUALIZAR_CARGA><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>115</LINE></ACTUALIZAR_CARGA>
+  <MOSTRAR_LIGERA><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>141</LINE></MOSTRAR_LIGERA>
+  <MOSTRAR_MEDIA><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>135</LINE></MOSTRAR_MEDIA>
+  <MOSTRAR_PESADA><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>129</LINE></MOSTRAR_PESADA>
  </LABELS>
 </ASSEMBLER_INFO>

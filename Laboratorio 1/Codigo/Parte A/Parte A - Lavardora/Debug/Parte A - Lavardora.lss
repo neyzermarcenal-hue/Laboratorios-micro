@@ -1,9 +1,12 @@
 
-AVRASM ver. 2.2.8  C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\main.asm Sun Aug 30 05:46:38 2026
+AVRASM ver. 2.2.8  C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm Sun Aug 30 08:28:07 2026
 
 [builtin](2): Including file 'C:/Program Files (x86)\Atmel\Studio\7.0\Packs\atmel\ATmega_DFP\1.7.374\avrasm\inc\m328Pdef.inc'
+C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm(1): Including file 'C:/Program Files (x86)\Atmel\Studio\7.0\Packs\atmel\ATmega_DFP\1.7.374\avrasm\inc\m328pdef.inc'
+[builtin](2): Including file 'C:/Program Files (x86)\Atmel\Studio\7.0\Packs\atmel\ATmega_DFP\1.7.374\avrasm\inc\m328Pdef.inc'
+C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm(1): Including file 'C:/Program Files (x86)\Atmel\Studio\7.0\Packs\atmel\ATmega_DFP\1.7.374\avrasm\inc\m328pdef.inc'
                                  
-                                 ;
+                                 .include "m328pdef.inc"
                                  
                                  ;***** Created: 2011-02-09 12:03 ******* Source: ATmega328P.xml **********
                                  ;*************************************************************************
@@ -984,17 +987,192 @@ AVRASM ver. 2.2.8  C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio
                                  
                                  ; ***** END OF FILE ******************************************************
                                  
-                                 ; Parte A - Lavardora.asm
-                                 ;
-                                 ; Created: 30/8/2026 05:46:02
-                                 ; Author : User
-                                 ;
+                                 
+                                 ;***** Created: 2011-02-09 12:03 ******* Source: ATmega328P.xml **********
+                                 ;*************************************************************************
+                                 ;* A P P L I C A T I O N   N O T E   F O R   T H E   A V R   F A M I L Y
+                                 ;* 
+                                 ;* Number            : AVR000
+                                 ;* File Name         : "m328Pdef.inc"
+                                 ;* Title             : Register/Bit Definitions for the ATmega328P
+                                 ;* Date              : 2011-02-09
+                                 ;* Version           : 2.35
+                                 ;* Support E-mail    : avr@atmel.com
+                                 ;* Target MCU        : ATmega328P
+                                 ;* 
+                                 ;* DESCRIPTION
+                                 ;* When including this file in the assembly program file, all I/O register 
+                                 ;* names and I/O register bit names appearing in the data book can be used.
+                                 ;* In addition, the six registers forming the three data pointers X, Y and 
+                                 ;* Z have been assigned names XL - ZH. Highest RAM address for Internal 
+                                 ;* SRAM is also defined 
+                                 ;* 
+                                 ;* The Register names are represented by their hexadecimal address.
+                                 ;* 
+                                 ;* The Register Bit names are represented by their bit number (0-7).
+                                 ;* 
+                                 ;* Please observe the difference in using the bit names with instructions
+                                 ;* such as "sbr"/"cbr" (set/clear bit in register) and "sbrs"/"sbrc"
+                                 ;* (skip if bit in register set/cleared). The following example illustrates
+                                 ;* this:
+                                 ;* 
+                                 ;* in    r16,PORTB             ;read PORTB latch
+                                 ;* sbr   r16,(1<<PB6)+(1<<PB5) ;set PB6 and PB5 (use masks, not bit#)
+                                 ;* out   PORTB,r16             ;output to PORTB
+                                 ;* 
+                                 ;* in    r16,TIFR              ;read the Timer Interrupt Flag Register
+                                 ;* sbrc  r16,TOV0              ;test the overflow flag (use bit#)
+                                 ;* rjmp  TOV0_is_set           ;jump if set
+                                 ;* ...                         ;otherwise do something else
+                                 ;*************************************************************************
+                                 
+                                 #ifndef _M328PDEF_INC_
+                                 #endif  /* _M328PDEF_INC_ */
+                                 
+                                 ; ***** END OF FILE ******************************************************
                                  
                                  
-                                 ; Replace with your application code
-                                 start:
-000000 9503                          inc r16
-000001 cffe                          rjmp start
+                                 ; Registros que vamos a usar:
+                                 
+                                 .def temp  = R16        ; Registro temporal para hacer configuraciones
+                                 .def carga = R17        ; Guarda la carga seleccionada:
+                                                         ; 0 = ligera
+                                                         ; 1 = media
+                                                         ; 2 = pesada
+                                 
+                                 
+                                 .org 0x0000
+000000 c000                          rjmp INICIO         ; Al arrancar el micro, va al inicio del programa
+                                 
+                                 
+                                 
+                                 INICIO:
+                                 
+                                 
+                                     ; Configuro el Stack Pointer:
+                                 
+000001 e008                          LDI temp, HIGH(RAMEND)    ; Carga la parte alta de la última dirección SRAM
+000002 bf0e                          OUT SPH, temp             ; La guarda en la parte alta del Stack Pointer
+                                 
+000003 ef0f                          LDI temp, LOW(RAMEND)     ; Carga la parte baja de la última dirección SRAM
+000004 bf0d                          OUT SPL, temp             ; La guarda en la parte baja del Stack Pointer
+                                 
+                                 
+                                 
+                                 		/* Configuro las salidas del PORTB
+                                 		  PB0 = listo
+                                 		  PB1 = lavado
+                                 	      PB2 = centrifugado
+                                 		  PB3 = secado
+                                 		  PB4 = fin
+                                 		  PB5 = carga ligera */
+                                 
+                                 	
+000005 e30f                      	LDI temp, 0b00111111      ; Pongo PB0 hasta PB5 como salidas
+000006 b904                          OUT DDRB, temp            ; Guardo esa configuración en DDRB
+                                 
+                                 
+                                 
+                                 		/* Configuro las salidas del PORTC
+                                 		   PC0 = carga media
+                                 		   PC1 = carga pesada
+                                 		   PC2 = motor derecha
+                                 		   PC3 = motor izquierda */
+                                 
+                                 		
+000007 e00f                      	LDI temp, 0b00001111      ; PC0 hasta PC3 van a ser salidas
+000008 b907                          OUT DDRC, temp            ; GuardO la configuración en DDRC
+                                 
+                                 
+                                 		/* Entradas del sistema
+                                 		   PD2 = START
+                                 		   PD3 = selección de carga
+                                 		   PD4 = sensor de puerta
+                                 		   PD5 = sensor de nivel */
+                                 
+                                 	
+000009 2700                          CLR temp                   ; temp = 0
+00000a b90a                          OUT DDRD, temp             ; DejO PORTD como entrada
+                                 
+                                 
+                                     ; Al comenzar apago todas las salidas
+                                 
+00000b 2700                          CLR temp
+00000c b905                          OUT PORTB, temp            ; Apaga las salidas del PORTB
+00000d b908                          OUT PORTC, temp            ; Apaga las salidas del PORTC
+                                 
+                                 
+                                     ; Activo las resistencias pull-up de PD2 a PD5
+                                 
+                                 
+00000e e30c                          LDI temp, 0b00111100      ; Pongo en 1 PD2, PD3, PD4 y PD5
+00000f b90b                          OUT PORTD, temp            ; Activa las pull-up internas
+                                 
+                                 
+                                     ; La lavadora empieza con carga ligera
+                                 
+000010 2711                          CLR carga                  ; carga = 0, entonces empieza en ligera
+                                 
+000011 9a28                          SBI PORTB, PB0             ; Enciende LED de listo
+000012 9a2d                          SBI PORTB, PB5             ; Enciende LED de carga ligera
+                                 
+                                 
+                                 LISTO:
+                                 
+000013 9b4b                          SBIS PIND, PD3             ; Si PD3 está en 1, el botón no está presionado
+000014 c001                          RJMP CAMBIAR_CARGA         ; Si está en 0, se presionó el botón de carga
+                                 
+000015 cffd                          RJMP LISTO                 ; Si no pasó nada, sigue esperando
+                                 
+                                 
+                                 CAMBIAR_CARGA:
+                                 
+                                     ; Esperamos a que se suelte el botón antes de seguir
+                                 
+                                 ESPERA_CARGA:
+                                 
+000016 9b4b                          SBIS PIND, PD3             ; Revisa si el botón ya volvió a 1
+000017 cffe                          RJMP ESPERA_CARGA          ; Si sigue apretado, se queda esperando
+                                 
+000018 9513                          INC carga                  ; Pasa a la siguiente carga / Incrementa 1
+                                 
+000019 3013                      	CPI carga, 3               ; Compara con 3
+00001a f409                          BRNE ACTUALIZAR_CARGA      ; Si no llegó a 3, seguimos normalmente
+                                 
+00001b 2711                      	CLR carga                  ; Si llegó a 3, vuelve a 0 = ligera
+                                 
+                                 
+                                 
+                                 ACTUALIZAR_CARGA:
+                                 
+00001c 982d                          CBI PORTB, PB5             ; Apaga LED de carga ligera
+00001d 9840                          CBI PORTC, PC0             ; Apaga LED de carga media
+00001e 9841                          CBI PORTC, PC1             ; Apaga LED de carga pesada
+                                 
+00001f 3010                          CPI carga, 0               ; ¿La carga es ligera?
+000020 f031                          BREQ MOSTRAR_LIGERA
+                                 
+000021 3011                          CPI carga, 1               ; ¿La carga es media?
+000022 f011                          BREQ MOSTRAR_MEDIA
+                                 
+                                     ; Si no es 0 ni 1, entonces es pesada
+                                 
+                                 MOSTRAR_PESADA:
+                                 
+000023 9a41                          SBI PORTC, PC1             ; Enciende LED de carga pesada
+000024 cfee                          RJMP LISTO
+                                 
+                                 
+                                 MOSTRAR_MEDIA:
+                                 
+000025 9a40                          SBI PORTC, PC0             ; Enciende LED de carga media
+000026 cfec                          RJMP LISTO
+                                 
+                                 
+                                 MOSTRAR_LIGERA:
+                                 
+000027 9a2d                          SBI PORTB, PB5             ; Enciende LED de carga ligera
+000028 cfea                          RJMP LISTO
 
 
 RESOURCE USE INFORMATION
@@ -1014,37 +1192,37 @@ counted separately from r26..r31 here.
 "ATmega328P" register use summary:
 x  :   0 y  :   0 z  :   0 r0 :   0 r1 :   0 r2 :   0 r3 :   0 r4 :   0 
 r5 :   0 r6 :   0 r7 :   0 r8 :   0 r9 :   0 r10:   0 r11:   0 r12:   0 
-r13:   0 r14:   0 r15:   0 r16:   1 r17:   0 r18:   0 r19:   0 r20:   0 
+r13:   0 r14:   0 r15:   0 r16:  15 r17:   6 r18:   0 r19:   0 r20:   0 
 r21:   0 r22:   0 r23:   0 r24:   0 r25:   0 r26:   0 r27:   0 r28:   0 
 r29:   0 r30:   0 r31:   0 
-Registers used: 1 out of 35 (2.9%)
+Registers used: 2 out of 35 (5.7%)
 
 "ATmega328P" instruction use summary:
 .lds  :   0 .sts  :   0 adc   :   0 add   :   0 adiw  :   0 and   :   0 
 andi  :   0 asr   :   0 bclr  :   0 bld   :   0 brbc  :   0 brbs  :   0 
-brcc  :   0 brcs  :   0 break :   0 breq  :   0 brge  :   0 brhc  :   0 
+brcc  :   0 brcs  :   0 break :   0 breq  :   2 brge  :   0 brhc  :   0 
 brhs  :   0 brid  :   0 brie  :   0 brlo  :   0 brlt  :   0 brmi  :   0 
-brne  :   0 brpl  :   0 brsh  :   0 brtc  :   0 brts  :   0 brvc  :   0 
-brvs  :   0 bset  :   0 bst   :   0 call  :   0 cbi   :   0 cbr   :   0 
-clc   :   0 clh   :   0 cli   :   0 cln   :   0 clr   :   0 cls   :   0 
+brne  :   1 brpl  :   0 brsh  :   0 brtc  :   0 brts  :   0 brvc  :   0 
+brvs  :   0 bset  :   0 bst   :   0 call  :   0 cbi   :   3 cbr   :   0 
+clc   :   0 clh   :   0 cli   :   0 cln   :   0 clr   :   4 cls   :   0 
 clt   :   0 clv   :   0 clz   :   0 com   :   0 cp    :   0 cpc   :   0 
-cpi   :   0 cpse  :   0 dec   :   0 eor   :   0 fmul  :   0 fmuls :   0 
+cpi   :   3 cpse  :   0 dec   :   0 eor   :   0 fmul  :   0 fmuls :   0 
 fmulsu:   0 icall :   0 ijmp  :   0 in    :   0 inc   :   1 jmp   :   0 
-ld    :   0 ldd   :   0 ldi   :   0 lds   :   0 lpm   :   0 lsl   :   0 
+ld    :   0 ldd   :   0 ldi   :   5 lds   :   0 lpm   :   0 lsl   :   0 
 lsr   :   0 mov   :   0 movw  :   0 mul   :   0 muls  :   0 mulsu :   0 
-neg   :   0 nop   :   0 or    :   0 ori   :   0 out   :   0 pop   :   0 
-push  :   0 rcall :   0 ret   :   0 reti  :   0 rjmp  :   1 rol   :   0 
-ror   :   0 sbc   :   0 sbci  :   0 sbi   :   0 sbic  :   0 sbis  :   0 
+neg   :   0 nop   :   0 or    :   0 ori   :   0 out   :   8 pop   :   0 
+push  :   0 rcall :   0 ret   :   0 reti  :   0 rjmp  :   7 rol   :   0 
+ror   :   0 sbc   :   0 sbci  :   0 sbi   :   5 sbic  :   0 sbis  :   2 
 sbiw  :   0 sbr   :   0 sbrc  :   0 sbrs  :   0 sec   :   0 seh   :   0 
 sei   :   0 sen   :   0 ser   :   0 ses   :   0 set   :   0 sev   :   0 
 sez   :   0 sleep :   0 spm   :   0 st    :   0 std   :   0 sts   :   0 
 sub   :   0 subi  :   0 swap  :   0 tst   :   0 wdr   :   0 
-Instructions used: 2 out of 113 (1.8%)
+Instructions used: 11 out of 113 (9.7%)
 
 "ATmega328P" memory use summary [bytes]:
 Segment   Begin    End      Code   Data   Used    Size   Use%
 ---------------------------------------------------------------
-[.cseg] 0x000000 0x000004      4      0      4   32768   0.0%
+[.cseg] 0x000000 0x000052     82      0     82   32768   0.3%
 [.dseg] 0x000100 0x000100      0      0      0    2048   0.0%
 [.eseg] 0x000000 0x000000      0      0      0    1024   0.0%
 
