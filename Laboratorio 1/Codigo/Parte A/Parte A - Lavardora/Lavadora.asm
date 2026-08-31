@@ -107,6 +107,29 @@ LISTO:
 
 
 
+PREPARAR_CENTRIFUGADO:
+
+    CBI PORTB, PB1             ; Apago el LED de lavado
+    SBI PORTB, PB2             ; Enciendo el LED de centrifugado
+
+    SBI PORTC, PC2             ; Enciendo el LED que representa el motor
+
+    MOV segundos, carga        ; Copio la carga: 0, 1 o 2
+    LSL segundos               ; Queda 0, 2 o 4
+    ADD segundos, carga        ; Queda 0, 3 o 6
+
+    LDI temp, 15
+    ADD segundos, temp         ; Queda 15, 18 o 21 segundos
+
+    RCALL RETARDO_SEGUNDOS     ; Mantiene el centrifugado ese tiempo
+
+    CBI PORTC, PC2             ; Apago el motor
+    CBI PORTB, PB2             ; Apago LED de centrifugado
+
+    RJMP PREPARAR_SECADO
+
+
+
 PREPARAR_SECADO:
 
     SBI PORTB, PB3             ; Enciendo el LED de secado
