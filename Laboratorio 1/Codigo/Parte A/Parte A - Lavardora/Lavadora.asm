@@ -107,6 +107,72 @@ LISTO:
 
 
 
+PREPARAR_SECADO:
+
+    SBI PORTB, PB3             ; Enciendo el LED de secado
+
+    RJMP SECADO_DERECHA
+
+
+SECADO_DERECHA:
+
+    SBI PORTC, PC2             ; Motor hacia la derecha
+    CBI PORTC, PC3             ; Me aseguro de apagar el de izquierda
+
+    MOV segundos, carga
+    LSL segundos               ; 0, 2 o 4
+
+    LDI temp, 5
+    ADD segundos, temp         ; 5, 7 o 9 segundos
+
+    RCALL RETARDO_SEGUNDOS
+
+    CBI PORTC, PC2             ; Apago motor derecha
+
+    RJMP SECADO_PAUSA
+
+
+SECADO_PAUSA:
+
+    MOV segundos, carga
+    LSL segundos               ; 0, 2 o 4
+
+    LDI temp, 3
+    ADD segundos, temp         ; 3, 5 o 7 segundos
+
+    RCALL RETARDO_SEGUNDOS     ; Espera con los motores apagados
+
+    RJMP SECADO_IZQUIERDA
+
+
+SECADO_IZQUIERDA:
+
+    SBI PORTC, PC3             ; Motor hacia la izquierda
+    CBI PORTC, PC2             ; Me aseguro de apagar el de derecha
+
+    MOV segundos, carga
+    LSL segundos               ; 0, 2 o 4
+
+    LDI temp, 5
+    ADD segundos, temp         ; 5, 7 o 9 segundos
+
+    RCALL RETARDO_SEGUNDOS
+
+    CBI PORTC, PC3             ; Apago motor izquierda
+    CBI PORTB, PB3             ; Apago LED de secado
+
+    RJMP FIN
+
+
+
+FIN:
+
+    SBI PORTB, PB4             ; Enciendo el LED de fin
+
+    RJMP FIN                   ; El proceso queda terminado
+
+
+
 CAMBIAR_CARGA:
 
     ; Esperamos a que se suelte el botón antes de seguir
