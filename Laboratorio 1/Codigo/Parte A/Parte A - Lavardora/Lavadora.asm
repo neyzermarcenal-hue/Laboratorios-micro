@@ -8,10 +8,12 @@
                         ; 0 = ligera
                         ; 1 = media
                         ; 2 = pesada
+.def segundos = R18     ; Guarda cuántos segundos tenemos que esperar
+.def ciclos   = R19     ; Cuenta las 5 repeticiones del lavado
 
 
 .org 0x0000
-    rjmp INICIO         ; Al arrancar el micro, va al inicio del programa
+    RJMP INICIO         ; Al arrancar el micro, va al inicio del programa
 
 
 
@@ -27,39 +29,49 @@ INICIO:
     OUT SPL, temp             ; La guarda en la parte baja del Stack Pointer
 
 
+    ; Configuramos Timer1 para usarlo en los retardos
 
-		/* Configuro las salidas del PORTB
-		  PB0 = listo
-		  PB1 = lavado
-	      PB2 = centrifugado
-		  PB3 = secado
-		  PB4 = fin
-		  PB5 = carga ligera */
+    CLR temp
+    STS TCCR1A, temp             ; Timer1 en funcionamiento normal
 
-	
-	LDI temp, 0b00111111      ; Pongo PB0 hasta PB5 como salidas
+    LDI temp, (1<<CS12)          ; Prescaler de 256
+    STS TCCR1B, temp             ; Arranca Timer1 con ese prescaler
+
+    CLR temp
+    STS TIMSK1, temp             ; No usamos interrupciones del Timer1
+
+
+        /* Configuro las salidas del PORTB
+          PB0 = listo
+          PB1 = lavado
+          PB2 = centrifugado
+          PB3 = secado
+          PB4 = fin
+          PB5 = carga ligera */
+
+
+    LDI temp, 0b00111111      ; Pongo PB0 hasta PB5 como salidas
     OUT DDRB, temp            ; Guardo esa configuración en DDRB
 
 
+        /* Configuro las salidas del PORTC
+           PC0 = carga media
+           PC1 = carga pesada
+           PC2 = motor derecha
+           PC3 = motor izquierda */
 
-		/* Configuro las salidas del PORTC
-		   PC0 = carga media
-		   PC1 = carga pesada
-		   PC2 = motor derecha
-		   PC3 = motor izquierda */
 
-		
-	LDI temp, 0b00001111      ; PC0 hasta PC3 van a ser salidas
+    LDI temp, 0b00001111      ; PC0 hasta PC3 van a ser salidas
     OUT DDRC, temp            ; GuardO la configuración en DDRC
 
 
-		/* Entradas del sistema
-		   PD2 = START
-		   PD3 = selección de carga
-		   PD4 = sensor de puerta
-		   PD5 = sensor de nivel */
+        /* Entradas del sistema
+           PD2 = START
+           PD3 = selección de carga
+           PD4 = sensor de puerta
+           PD5 = sensor de nivel */
 
-	
+
     CLR temp                   ; temp = 0
     OUT DDRD, temp             ; DejO PORTD como entrada
 
@@ -73,7 +85,6 @@ INICIO:
 
     ; Activo las resistencias pull-up de PD2 a PD5
 
-
     LDI temp, 0b00111100      ; Pongo en 1 PD2, PD3, PD4 y PD5
     OUT PORTD, temp            ; Activa las pull-up internas
 
@@ -86,12 +97,14 @@ INICIO:
     SBI PORTB, PB5             ; Enciende LED de carga ligera
 
 
+
 LISTO:
 
-    SBIS PIND, PD3             ; Si PD3 está en 1, el botón no está presionado
-    RJMP CAMBIAR_CARGA         ; Si está en 0, se presionó el botón de carga
+    SBIS PIND, PD3             ; Si PD3 está en 1, no se presionó CARGA
+    RJMP CAMBIAR_CARGA         ; Si está en 0, cambia la carga
 
-    RJMP LISTO                 ; Si no pasó nada, sigue esperando
+    RJMP LISTO                 ; Si no se presionó nada, sigue esperando
+
 
 
 CAMBIAR_CARGA:
@@ -105,10 +118,10 @@ ESPERA_CARGA:
 
     INC carga                  ; Pasa a la siguiente carga / Incrementa 1
 
-	CPI carga, 3               ; Compara con 3
+    CPI carga, 3               ; Compara con 3
     BRNE ACTUALIZAR_CARGA      ; Si no llegó a 3, seguimos normalmente
 
-	CLR carga                  ; Si llegó a 3, vuelve a 0 = ligera
+    CLR carga                  ; Si llegó a 3, vuelve a 0 = ligera
 
 
 
@@ -142,3 +155,33 @@ MOSTRAR_LIGERA:
 
     SBI PORTB, PB5             ; Enciende LED de carga ligera
     RJMP LISTO
+
+
+
+RETARDO_SEGUNDOS:
+
+    RCALL RETARDO_1S           ; Espera un segundo
+
+    DEC segundos               ; Resta un segundo del total
+    BRNE RETARDO_SEGUNDOS      ; Si todavía quedan segundos, repite
+
+    RET                        ; Si llegó a 0, vuelve al programa
+
+
+RETARDO_1S:
+
+    SBI TIFR1, TOV1            ; Limpia la bandera de desbordamiento anterior
+
+    LDI temp, HIGH(3036)       ; Parte alta del valor inicial del Timer1
+    STS TCNT1H, temp
+
+    LDI temp, LOW(3036)        ; Parte baja del valor inicial
+    STS TCNT1L, temp
+
+
+ESPERA_TIMER1:
+
+    SBIS TIFR1, TOV1           ; ¿Timer1 ya llegó al desbordamiento?
+    RJMP ESPERA_TIMER1         ; No: sigue esperando
+
+    RET                        ; Sí: pasó aproximadamente 1 segundo
