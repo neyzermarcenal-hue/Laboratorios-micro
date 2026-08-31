@@ -103,7 +103,78 @@ LISTO:
     SBIS PIND, PD3             ; Si PD3 está en 1, no se presionó CARGA
     RJMP CAMBIAR_CARGA         ; Si está en 0, cambia la carga
 
+    SBIS PIND, PD2             ; Si PD2 está en 1, no se presionó START
+    RJMP ESPERA_START          ; Si está en 0, se presionó START
+
     RJMP LISTO                 ; Si no se presionó nada, sigue esperando
+
+
+
+ESPERA_START:
+
+    SBIS PIND, PD2             ; Revisa si ya soltamos START
+    RJMP ESPERA_START          ; Si sigue en 0, sigue esperando
+
+    RJMP PUERTA                ; Cuando vuelve a 1, revisamos la puerta
+
+
+
+PUERTA:
+
+    SBIS PIND, PD4             ; PD4=1 significa puerta abierta
+    RJMP LLENADO               ; PD4=0 significa puerta cerrada
+
+    RJMP PUERTA                ; Si está abierta, se queda esperando
+
+
+
+LLENADO:
+
+    SBIS PIND, PD5             ; PD5=1 significa que todavía falta agua
+    RJMP PREPARAR_LAVADO       ; PD5=0 significa nivel alcanzado
+
+    RJMP LLENADO               ; Mientras no esté lleno, sigue esperando
+
+
+
+PREPARAR_LAVADO:
+
+    CBI PORTB, PB0             ; Apaga el LED de listo
+    SBI PORTB, PB1             ; Enciende el LED de lavado
+
+    LDI ciclos, 5              ; El lavado se tiene que repetir 5 veces
+
+    RJMP LAVADO_GIRO
+
+
+
+LAVADO_GIRO:
+
+    SBI PORTC, PC2             ; Encendemos el LED que representa el motor
+
+    MOV segundos, carga        ; Copiamos 0, 1 o 2 según la carga
+    LDI temp, 2
+    ADD segundos, temp         ; Queda 2, 3 o 4 segundos
+
+    RCALL RETARDO_SEGUNDOS     ; Espera el tiempo correspondiente
+
+    CBI PORTC, PC2             ; Apagamos el motor
+
+    RJMP LAVADO_PAUSA
+
+
+
+LAVADO_PAUSA:
+
+    MOV segundos, carga        ; Copia nuevamente el tipo de carga
+    INC segundos               ; Queda 1, 2 o 3 segundos de pausa
+
+    RCALL RETARDO_SEGUNDOS     ; Esperamos con el motor apagado
+
+    DEC ciclos                 ; Terminamos una repetición
+    BRNE LAVADO_GIRO           ; Si todavía no hizo las 5, vuelve a girar
+
+    RJMP PREPARAR_CENTRIFUGADO ; Si terminó las 5, sigue al centrifugado
 
 
 
@@ -137,6 +208,7 @@ PREPARAR_SECADO:
     RJMP SECADO_DERECHA
 
 
+
 SECADO_DERECHA:
 
     SBI PORTC, PC2             ; Motor hacia la derecha
@@ -155,6 +227,7 @@ SECADO_DERECHA:
     RJMP SECADO_PAUSA
 
 
+
 SECADO_PAUSA:
 
     MOV segundos, carga
@@ -166,6 +239,7 @@ SECADO_PAUSA:
     RCALL RETARDO_SEGUNDOS     ; Espera con los motores apagados
 
     RJMP SECADO_IZQUIERDA
+
 
 
 SECADO_IZQUIERDA:
@@ -228,16 +302,20 @@ ACTUALIZAR_CARGA:
 
     ; Si no es 0 ni 1, entonces es pesada
 
+
+
 MOSTRAR_PESADA:
 
     SBI PORTC, PC1             ; Enciende LED de carga pesada
     RJMP LISTO
 
 
+
 MOSTRAR_MEDIA:
 
     SBI PORTC, PC0             ; Enciende LED de carga media
     RJMP LISTO
+
 
 
 MOSTRAR_LIGERA:
@@ -257,6 +335,7 @@ RETARDO_SEGUNDOS:
     RET                        ; Si llegó a 0, vuelve al programa
 
 
+
 RETARDO_1S:
 
     SBI TIFR1, TOV1            ; Limpia la bandera de desbordamiento anterior
@@ -266,6 +345,7 @@ RETARDO_1S:
 
     LDI temp, LOW(3036)        ; Parte baja del valor inicial
     STS TCNT1L, temp
+
 
 
 ESPERA_TIMER1:
