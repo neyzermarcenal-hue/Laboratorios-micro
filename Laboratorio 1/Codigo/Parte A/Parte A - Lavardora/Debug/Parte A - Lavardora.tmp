@@ -23,13 +23,28 @@
   <FILE>Parte A - Lavardora.lss</FILE>
  </OUTPUT_FILES>
  <LABELS>
-  <INICIO><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>18</LINE></INICIO>
-  <LISTO><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>89</LINE></LISTO>
-  <CAMBIAR_CARGA><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>97</LINE></CAMBIAR_CARGA>
-  <ESPERA_CARGA><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>101</LINE></ESPERA_CARGA>
-  <ACTUALIZAR_CARGA><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>115</LINE></ACTUALIZAR_CARGA>
-  <MOSTRAR_LIGERA><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>141</LINE></MOSTRAR_LIGERA>
-  <MOSTRAR_MEDIA><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>135</LINE></MOSTRAR_MEDIA>
-  <MOSTRAR_PESADA><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>129</LINE></MOSTRAR_PESADA>
+  <INICIO><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>20</LINE></INICIO>
+  <LISTO><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>101</LINE></LISTO>
+  <CAMBIAR_CARGA><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>273</LINE></CAMBIAR_CARGA>
+  <ESPERA_START><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>113</LINE></ESPERA_START>
+  <PUERTA><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>122</LINE></PUERTA>
+  <LLENADO><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>131</LINE></LLENADO>
+  <PREPARAR_LAVADO><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>140</LINE></PREPARAR_LAVADO>
+  <LAVADO_GIRO><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>151</LINE></LAVADO_GIRO>
+  <RETARDO_SEGUNDOS><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>328</LINE></RETARDO_SEGUNDOS>
+  <LAVADO_PAUSA><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>167</LINE></LAVADO_PAUSA>
+  <PREPARAR_CENTRIFUGADO><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>181</LINE></PREPARAR_CENTRIFUGADO>
+  <PREPARAR_SECADO><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>204</LINE></PREPARAR_SECADO>
+  <SECADO_DERECHA><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>212</LINE></SECADO_DERECHA>
+  <SECADO_PAUSA><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>231</LINE></SECADO_PAUSA>
+  <SECADO_IZQUIERDA><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>245</LINE></SECADO_IZQUIERDA>
+  <FIN><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>265</LINE></FIN>
+  <ESPERA_CARGA><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>277</LINE></ESPERA_CARGA>
+  <ACTUALIZAR_CARGA><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>291</LINE></ACTUALIZAR_CARGA>
+  <MOSTRAR_LIGERA><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>321</LINE></MOSTRAR_LIGERA>
+  <MOSTRAR_MEDIA><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>314</LINE></MOSTRAR_MEDIA>
+  <MOSTRAR_PESADA><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>307</LINE></MOSTRAR_PESADA>
+  <RETARDO_1S><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>339</LINE></RETARDO_1S>
+  <ESPERA_TIMER1><FILE>C:\Users\User\OneDrive\Desktop\Laboratorios-micro\Laboratorio 1\Codigo\Parte A\Parte A - Lavardora\Lavadora.asm</FILE><LINE>351</LINE></ESPERA_TIMER1>
  </LABELS>
 </ASSEMBLER_INFO>
