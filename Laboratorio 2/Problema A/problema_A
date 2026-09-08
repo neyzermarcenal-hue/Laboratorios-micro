@@ -1,0 +1,327 @@
+.include "m328pdef.inc"
+
+.def temp    = r16
+.def dato    = r17 ; Guarda el patrón de LEDs que corresponde a una fila.
+.def indice  = r18 ; Indica qué fila estamos mostrando.
+.def figura  = r19 ; Guarda cuál dibujo está seleccionado
+.def mascara = r20 ; Se utiliza para seleccionar una sola fila de la matriz.
+
+.org 0x0000
+    rjmp reset
+
+
+reset:
+
+    ; Configuro el Stack
+    ldi temp, HIGH(RAMEND)
+    out SPH, temp
+
+    ldi temp, LOW(RAMEND)
+    out SPL, temp
+
+
+    ; PORTD son las filas de la matriz
+    ldi temp, 0xFF
+    out DDRD, temp
+
+    ; Empiezo con todas las filas apagadas
+    ldi temp, 0xFF
+    out PORTD, temp
+
+
+    ; PC0 a PC5 son 6 columnas
+    ldi temp, 0x3F
+    out DDRC, temp
+
+    ; Columnas apagadas
+    ldi temp, 0x00
+    out PORTC, temp
+
+
+    ; PB0 y PB1 son los botones
+    ; PB2 y PB3 son las otras 2 columnas
+    ldi temp, 0b00001100
+    out DDRB, temp
+
+    ; Activo pull-up en PB0 y PB1
+    ldi temp, 0b00000011
+    out PORTB, temp
+
+
+    ; Empiezo mostrando UWU
+    ldi figura, 0
+
+
+main:
+
+    ; Boton 1 selecciona UWU
+    sbis PINB, PB0
+    rjmp SELECCION_UWU
+
+    ; Boton 2 selecciona XD
+    sbis PINB, PB1
+    rjmp SELECCION_XD
+
+
+    ; Mantengo la figura seleccionada
+    cpi figura, 0
+    breq MOSTRAR_UWU
+
+    rjmp MOSTRAR_XD
+
+
+SELECCION_UWU:
+
+    ldi figura, 0
+    rjmp MOSTRAR_UWU
+
+
+SELECCION_XD:
+
+    ldi figura, 1
+    rjmp MOSTRAR_XD
+
+
+; =========================
+; Mostrar UWU
+; =========================
+
+MOSTRAR_UWU:
+
+    ldi indice, 0
+
+
+BUCLE_UWU:
+
+    rcall MOSTRAR_FILA_UWU
+
+    inc indice
+
+    cpi indice, 8
+    brlo BUCLE_UWU
+
+    rjmp main
+
+
+; =========================
+; Mostrar XD
+; =========================
+
+MOSTRAR_XD:
+
+    ldi indice, 0
+
+
+BUCLE_XD:
+
+    rcall MOSTRAR_FILA_XD
+
+    inc indice
+
+    cpi indice, 8
+    brlo BUCLE_XD
+
+    rjmp main
+
+
+; =========================
+; Filas UWU
+; =========================
+
+MOSTRAR_FILA_UWU:
+
+    ; Apago todas las filas
+    ldi temp, 0xFF
+    out PORTD, temp
+
+    ; Apago primeras 6 columnas
+    ldi temp, 0x00
+    out PORTC, temp
+
+    ; Apago PB2 y PB3
+    in temp, PORTB
+    andi temp, 0b11110011
+    out PORTB, temp
+
+
+    ; Selecciono la fila
+    ldi mascara, 1
+    mov temp, indice
+
+
+DESPLAZA_UWU:
+
+    tst temp
+    breq FILA_UWU_LISTA
+
+    lsl mascara
+    dec temp
+
+    rjmp DESPLAZA_UWU
+
+
+FILA_UWU_LISTA:
+
+    ; Prendo solamente la fila actual
+    in temp, PORTD
+    com mascara
+    and temp, mascara
+    out PORTD, temp
+
+
+    ; Busco el patron UWU
+    ldi ZH, HIGH(UWU*2)
+    ldi ZL, LOW(UWU*2)
+
+    add ZL, indice
+    clr temp
+    adc ZH, temp
+
+    lpm dato, Z
+
+
+    rcall ESCRIBIR_COLUMNAS
+    rcall DELAY
+
+    ret
+
+
+; =========================
+; Filas XD
+; =========================
+
+MOSTRAR_FILA_XD:
+
+    ; Apago todas las filas
+    ldi temp, 0xFF
+    out PORTD, temp
+
+    ; Apago primeras 6 columnas
+    ldi temp, 0x00
+    out PORTC, temp
+
+    ; Apago PB2 y PB3
+    in temp, PORTB
+    andi temp, 0b11110011
+    out PORTB, temp
+
+
+    ; Selecciono la fila
+    ldi mascara, 1
+    mov temp, indice
+
+
+DESPLAZA_XD:
+
+    tst temp
+    breq FILA_XD_LISTA
+
+    lsl mascara
+    dec temp
+
+    rjmp DESPLAZA_XD
+
+
+FILA_XD_LISTA:
+
+    ; Prendo solamente la fila actual
+    in temp, PORTD
+    com mascara
+    and temp, mascara
+    out PORTD, temp
+
+
+    ; Busco el patron XD
+    ldi ZH, HIGH(XD*2)
+    ldi ZL, LOW(XD*2)
+
+    add ZL, indice
+    clr temp
+    adc ZH, temp
+
+    lpm dato, Z
+
+
+    rcall ESCRIBIR_COLUMNAS
+    rcall DELAY
+
+    ret
+
+
+; =========================
+; Escritura de columnas
+; =========================
+
+ESCRIBIR_COLUMNAS:
+
+    ; PC0 a PC5
+    mov temp, dato
+    andi temp, 0b00111111
+    out PORTC, temp
+
+
+    ; Columna 7 en PB2
+    sbrc dato, 6
+    sbi PORTB, PB2
+
+    sbrs dato, 6
+    cbi PORTB, PB2
+
+
+    ; Columna 8 en PB3
+    sbrc dato, 7
+    sbi PORTB, PB3
+
+    sbrs dato, 7
+    cbi PORTB, PB3
+
+    ret
+
+
+; =========================
+; Dibujo UWU
+; =========================
+
+UWU:
+
+    .db 0b00000000, 0b00110110
+    .db 0b00110110, 0b00000000
+    .db 0b01001001, 0b01001001
+    .db 0b00110110, 0b00000000
+
+
+; =========================
+; Dibujo XD
+; =========================
+
+XD:
+
+    .db 0b10101110, 0b10101001
+    .db 0b01001001, 0b01001001
+    .db 0b01001001, 0b10101001
+    .db 0b10101110, 0b00000000
+
+
+; =========================
+; Delay
+; =========================
+
+DELAY:
+
+    ldi r21, 30
+
+
+D1:
+
+    ldi r22, 50
+
+
+D2:
+
+    dec r22
+    brne D2
+
+    dec r21
+    brne D1
+
+    ret
