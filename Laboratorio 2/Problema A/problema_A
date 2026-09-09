@@ -505,7 +505,6 @@ ESCRIBIR_COLUMNAS:
 
 ; =========================
 ; Inicializar UART
-; 16 MHz - 9600 baudios
 ; =========================
 
 INIT_UART:
@@ -710,14 +709,13 @@ MENSAJE:
 TEXTO_MENU:
 
     .db 13, 10
-    .db "MATRIZ LED", 13
-    .db 10, 13
-    .db "1 - VAMOS MARCELOOOO", 13
-    .db 10, 13
-    .db "2 - UWU", 13
-    .db 10, 13
-    .db "3 - XD", 13
-    .db 10, 0
+    .db "MATRIZ LED", 13, 10
+    .db 13, 10
+    .db "1 - VAMOS MARCELOOOO", 13, 10
+    .db "2 - UWU", 13, 10
+    .db 13, 10
+    .db "3 - XD", 13, 10
+    .db 0, 0
 
 
 ; =========================
