@@ -712,10 +712,8 @@ TEXTO_MENU:
     .db "MATRIZ LED", 13, 10
     .db 13, 10
     .db "1 - VAMOS MARCELOOOO", 13, 10
-    .db "2 - UWU", 13, 10
-    .db 13, 10
-    .db "3 - XD", 13, 10
-    .db 0, 0
+    .db "2 - UWU", 13, 10, 13
+    .db 10, "3 - XD", 13, 10, 0
 
 
 ; =========================
