@@ -6,6 +6,11 @@
 .def figura  = r19 ; Guarda cuál dibujo está seleccionado
 .def mascara = r20 ; Se utiliza para seleccionar una sola fila de la matriz.
 
+; Registros para el mensaje
+.def posicion = r21
+.def columna = r22
+.def contador = r23
+
 .org 0x0000
     rjmp reset
 
@@ -18,7 +23,6 @@ reset:
 
     ldi temp, LOW(RAMEND)
     out SPL, temp
-
 
     ; PORTD son las filas de la matriz
     ldi temp, 0xFF
@@ -48,9 +52,9 @@ reset:
     out PORTB, temp
 
 
-    ; Empiezo mostrando UWU
-    ldi figura, 0
-
+ldi figura, 2
+    ; Empiezo desde la primera columna del mensaje
+    clr posicion
 
 main:
 
@@ -61,6 +65,15 @@ main:
     ; Boton 2 selecciona XD
     sbis PINB, PB1
     rjmp SELECCION_XD
+
+    cpi figura, 0
+    breq MOSTRAR_UWU
+
+    cpi figura, 1
+    breq MOSTRAR_XD
+
+    ; Si no es 0 ni 1, muestro el mensaje
+    rjmp MOSTRAR_MENSAJE
 
 
     ; Mantengo la figura seleccionada
@@ -127,6 +140,39 @@ BUCLE_XD:
 ; =========================
 ; Filas UWU
 ; =========================
+
+; =========================
+; Mostrar mensaje 
+; =========================
+
+MOSTRAR_MENSAJE:
+    ldi contador, 35 ; repito varias veces la misma osicion para que el desplazamiento no sea demasiado rápido
+
+REFRESCAR_MENSAJE:
+    ldi indice, 0
+
+BUCLE_MENSAJE:
+    rcall MOSTRAR_FILA_MENSAJE
+
+    inc indice
+
+    cpi indice, 8 
+    brlo BUCLE_MENSAJE
+
+    dec contador
+    brne REFRESCAR_MENSAJE
+
+    ;Cuando termine de refrescar la imagen, avanzo una columna en el mensaje
+    inc posicion
+
+    cpi posición, 96
+    brlo CONTINUAR_MENSAJE
+
+    clr posicion
+
+CONTINUAR_MENSAJE:
+    rjmp main
+    
 
 MOSTRAR_FILA_UWU:
 
@@ -247,6 +293,109 @@ FILA_XD_LISTA:
 
     ret
 
+MOSTRAR_FILA_MENSAJE:
+
+    ldi temp, 0xFF
+    out PORTD, temp
+
+    ldi temp, 0x00
+    out PORTC, temp
+
+    in temp, PORTB
+    andi temp, 0b11110011
+    out PORTB, temp
+
+    ldi mascara, 1
+    mov temp, indice
+
+DESPLAZA_FILA_MENSAJE:
+
+    tst temp
+    breq FILA_MENSAJE_LISTA
+
+    lsl mascara
+    dec temp
+
+    rjmp DESPLAZA_FILA_MENSAJE
+
+FILA_MENSAJE_LISTA:
+
+    in temp, PORTD
+    com mascara
+    and temp, mascara
+    out PORTD, temp
+
+; Formo los 8 bits que se ven en pantalla
+    clr dato
+
+    ldi columna, 0
+
+    ARMAR_FILA:
+
+    ; Z apunta al mensaje
+    ldi ZH, HIGH(MENSAJE*2)
+    ldi ZL, LOW(MENSAJE*2)
+
+    ; Sumo la posición actual
+    add ZL, posicion
+    clr temp
+    adc ZH, temp
+
+    ; Leo la columna del mensaje
+    lpm mascara, Z
+
+    mov temp, indice
+
+BUSCAR_BIT_FILA:
+
+    tst temp
+    breq BIT_FILA_LISTO
+
+    lsr mascara
+    dec temp
+
+    rjmp BUSCAR_BIT_FILA
+
+BIT_FILA_LISTO:
+
+    ; Si el bit 0 está apagaddo no hago nada
+    sbrs mascara, o
+    rjmp SIGUIENTE_COLUMNA
+
+    ; Si está prendido, pongo un 1 en la columna corresponiendte deñ dato
+    ldi mascara, 1
+    mov temp, columna
+
+DESPLAZA_COLUMNA:
+
+    tst temp
+    breq COLUMNA_LISTA
+
+    lsl mascara
+    dec temp
+
+    rjmp  DESPLAZA_COLUMNA
+
+COLUMNA_LISTA:
+
+    or dato, mascara
+
+SIGUIENTE_COLUMNA:
+
+    inc columna
+
+    cpi columna, 8
+    brlo ARMAR_FILA
+
+    ; Mando los 8 bits a la matriz
+
+    rcall ESCRIBIR_COLUMNAS
+
+    rcall DELAY
+
+    ret
+
+
 
 ; =========================
 ; Escritura de columnas
@@ -254,7 +403,7 @@ FILA_XD_LISTA:
 
 ESCRIBIR_COLUMNAS:
 
-    ; PC0 a PC5
+    ; Las primeras 6 columnas van por PORTC
     mov temp, dato
     andi temp, 0b00111111
     out PORTC, temp
@@ -303,25 +452,184 @@ XD:
 
 
 ; =========================
+; Mensaje VAMOS MARCELOOOO
+;
+; cada byte represena UNA COLUMNA de una letra
+; se deja una columna en 0 entre las letras
+;
+; =========================
+
+MENSAJE:
+
+    ; Espacio inicial para que entre desde la derecha
+    .db 0x00, 0x00, 0x00, 0x00
+    .db 0x00, 0x00, 0x00, 0x00
+
+
+    ; V
+    .db 0b00011111
+    .db 0b00100000
+    .db 0b01000000
+    .db 0b00100000
+    .db 0b00011111
+    .db 0b00000000
+
+
+    ; A
+    .db 0b01111110
+    .db 0b00001001
+    .db 0b00001001
+    .db 0b00001001
+    .db 0b01111110
+    .db 0b00000000
+
+
+    ; M
+    .db 0b01111111
+    .db 0b00000010
+    .db 0b00000100
+    .db 0b00000010
+    .db 0b01111111
+    .db 0b00000000
+
+
+    ; O
+    .db 0b00111110
+    .db 0b01000001
+    .db 0b01000001
+    .db 0b01000001
+    .db 0b00111110
+    .db 0b00000000
+
+
+    ; S
+    .db 0b01000110
+    .db 0b01001001
+    .db 0b01001001
+    .db 0b01001001
+    .db 0b00110001
+    .db 0b00000000
+
+
+    ; espacio
+    .db 0x00, 0x00
+
+
+    ; M
+    .db 0b01111111
+    .db 0b00000010
+    .db 0b00000100
+    .db 0b00000010
+    .db 0b01111111
+    .db 0b00000000
+
+
+    ; A
+    .db 0b01111110
+    .db 0b00001001
+    .db 0b00001001
+    .db 0b00001001
+    .db 0b01111110
+    .db 0b00000000
+
+
+    ; R
+    .db 0b01111111
+    .db 0b00001001
+    .db 0b00011001
+    .db 0b00101001
+    .db 0b01000110
+    .db 0b00000000
+
+
+    ; C
+    .db 0b00111110
+    .db 0b01000001
+    .db 0b01000001
+    .db 0b01000001
+    .db 0b00100010
+    .db 0b00000000
+
+
+    ; E
+    .db 0b01111111
+    .db 0b01001001
+    .db 0b01001001
+    .db 0b01001001
+    .db 0b01000001
+    .db 0b00000000
+
+
+    ; L
+    .db 0b01111111
+    .db 0b01000000
+    .db 0b01000000
+    .db 0b01000000
+    .db 0b01000000
+    .db 0b00000000
+
+
+    ; O
+    .db 0b00111110
+    .db 0b01000001
+    .db 0b01000001
+    .db 0b01000001
+    .db 0b00111110
+    .db 0b00000000
+
+
+    ; O
+    .db 0b00111110
+    .db 0b01000001
+    .db 0b01000001
+    .db 0b01000001
+    .db 0b00111110
+    .db 0b00000000
+
+
+    ; O
+    .db 0b00111110
+    .db 0b01000001
+    .db 0b01000001
+    .db 0b01000001
+    .db 0b00111110
+    .db 0b00000000
+
+
+    ; O
+    .db 0b00111110
+    .db 0b01000001
+    .db 0b01000001
+    .db 0b01000001
+    .db 0b00111110
+    .db 0b00000000
+
+
+    ; Espacio final
+    .db 0x00, 0x00, 0x00, 0x00
+    .db 0x00, 0x00, 0x00, 0x00
+
+
+; =========================
 ; Delay
 ; =========================
 
 DELAY:
 
-    ldi r21, 30
+    ldi r24, 30
 
 
 D1:
 
-    ldi r22, 50
+    ldi r25, 50
 
 
 D2:
 
-    dec r22
+    dec r25
     brne D2
 
-    dec r21
+    dec r24
     brne D1
 
     ret
