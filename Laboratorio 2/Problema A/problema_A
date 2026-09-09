@@ -11,7 +11,7 @@
 .def columna = r22
 .def contador = r23
 
-.equ LARGO_MENSAJE = 101
+.equ LIMITE_MENSAJE = 101
 
 .org 0x0000
     rjmp reset
@@ -54,7 +54,7 @@ reset:
     out PORTB, temp
 
 
-ldi figura, 2
+    ldi figura, 2
     ; Empiezo desde la primera columna del mensaje
     clr posicion
 
@@ -136,7 +136,7 @@ BUCLE_XD:
 ; =========================
 
 MOSTRAR_MENSAJE:
-    ldi contador, 35 ; repito varias veces la misma osicion para que el desplazamiento no sea demasiado rápido
+    ldi contador, 35 ; repito varias veces la misma posicion para que el desplazamiento no sea demasiado rápido
 
 REFRESCAR_MENSAJE:
     ldi indice, 0
@@ -152,10 +152,10 @@ BUCLE_MENSAJE:
     dec contador
     brne REFRESCAR_MENSAJE
 
-    ;Cuando termine de refrescar la imagen, avanzo una columna en el mensaje
+    ; Cuando termine de refrescar la imagen, avanzo una columna en el mensaje
     inc posicion
 
-    cpi posicion, LARGO_MENSAJE
+    cpi posicion, LIMITE_MENSAJE
     brlo CONTINUAR_MENSAJE
 
     clr posicion
@@ -323,7 +323,7 @@ FILA_MENSAJE_LISTA:
     and temp, mascara
     out PORTD, temp
 
-; Formo los 8 bits que se ven en pantalla
+    ; Formo los 8 bits que se ven en pantalla
     clr dato
 
     ldi columna, 0
@@ -361,11 +361,11 @@ BUSCAR_BIT_FILA:
 
 BIT_FILA_LISTO:
 
-    ; Si el bit 0 está apagaddo no hago nada
+    ; Si el bit 0 está apagado no hago nada
     sbrs mascara, 0
     rjmp SIGUIENTE_COLUMNA
 
-    ; Si está prendido, pongo un 1 en la columna corresponiendte deñ dato
+    ; Si está prendido, pongo un 1 en la columna correspondiente del dato
     ldi mascara, 1
     mov temp, columna
 
@@ -397,8 +397,6 @@ SIGUIENTE_COLUMNA:
     rcall DELAY
 
     ret
-
-
 
 ; =========================
 ; Escritura de columnas
