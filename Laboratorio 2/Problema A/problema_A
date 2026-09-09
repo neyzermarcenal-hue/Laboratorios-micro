@@ -145,13 +145,13 @@ SELECCION_MENSAJE:
 SELECCION_UWU:
 
     ldi figura, 0
-    rjmp MOSTRAR_UWU
+    ret
 
 
 SELECCION_XD:
 
     ldi figura, 1
-    rjmp MOSTRAR_XD
+    ret
 
 
 ; =========================
@@ -415,6 +415,11 @@ APAGAR_MATRIZ:
 
     ret
 
+; =========================
+; Seleccionar fila
+; =========================
+
+SELECCIONAR_FILA:
 
     ; Filas 0 a 5 están en PD2 a PD7
     cpi indice, 6
