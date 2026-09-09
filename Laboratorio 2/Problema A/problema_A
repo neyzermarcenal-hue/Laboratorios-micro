@@ -11,6 +11,8 @@
 .def columna = r22
 .def contador = r23
 
+.equ LARGO_MENSAJE = 101
+
 .org 0x0000
     rjmp reset
 
@@ -76,13 +78,6 @@ main:
     rjmp MOSTRAR_MENSAJE
 
 
-    ; Mantengo la figura seleccionada
-    cpi figura, 0
-    breq MOSTRAR_UWU
-
-    rjmp MOSTRAR_XD
-
-
 SELECCION_UWU:
 
     ldi figura, 0
@@ -136,11 +131,6 @@ BUCLE_XD:
 
     rjmp main
 
-
-; =========================
-; Filas UWU
-; =========================
-
 ; =========================
 ; Mostrar mensaje 
 ; =========================
@@ -165,14 +155,18 @@ BUCLE_MENSAJE:
     ;Cuando termine de refrescar la imagen, avanzo una columna en el mensaje
     inc posicion
 
-    cpi posición, 96
+    cpi posicion, LARGO_MENSAJE
     brlo CONTINUAR_MENSAJE
 
     clr posicion
 
 CONTINUAR_MENSAJE:
     rjmp main
-    
+
+
+; =========================
+; Filas UWU
+; =========================
 
 MOSTRAR_FILA_UWU:
 
@@ -293,6 +287,10 @@ FILA_XD_LISTA:
 
     ret
 
+; =========================
+; Filas del mensaje
+; =========================
+
 MOSTRAR_FILA_MENSAJE:
 
     ldi temp, 0xFF
@@ -341,6 +339,11 @@ FILA_MENSAJE_LISTA:
     clr temp
     adc ZH, temp
 
+    ; Sumo la columna que estoy moestrando
+    add ZL, columna
+    clr temp
+    adc ZH, temp
+
     ; Leo la columna del mensaje
     lpm mascara, Z
 
@@ -359,7 +362,7 @@ BUSCAR_BIT_FILA:
 BIT_FILA_LISTO:
 
     ; Si el bit 0 está apagaddo no hago nada
-    sbrs mascara, o
+    sbrs mascara, 0
     rjmp SIGUIENTE_COLUMNA
 
     ; Si está prendido, pongo un 1 en la columna corresponiendte deñ dato
@@ -465,145 +468,83 @@ MENSAJE:
     .db 0x00, 0x00, 0x00, 0x00
     .db 0x00, 0x00, 0x00, 0x00
 
-
     ; V
-    .db 0b00011111
-    .db 0b00100000
-    .db 0b01000000
-    .db 0b00100000
-    .db 0b00011111
-    .db 0b00000000
-
+    .db 0b00011111, 0b00100000
+    .db 0b01000000, 0b00100000
+    .db 0b00011111, 0b00000000
 
     ; A
-    .db 0b01111110
-    .db 0b00001001
-    .db 0b00001001
-    .db 0b00001001
-    .db 0b01111110
-    .db 0b00000000
-
+    .db 0b01111110, 0b00001001
+    .db 0b00001001, 0b00001001
+    .db 0b01111110, 0b00000000
 
     ; M
-    .db 0b01111111
-    .db 0b00000010
-    .db 0b00000100
-    .db 0b00000010
-    .db 0b01111111
-    .db 0b00000000
-
+    .db 0b01111111, 0b00000010
+    .db 0b00000100, 0b00000010
+    .db 0b01111111, 0b00000000
 
     ; O
-    .db 0b00111110
-    .db 0b01000001
-    .db 0b01000001
-    .db 0b01000001
-    .db 0b00111110
-    .db 0b00000000
-
+    .db 0b00111110, 0b01000001
+    .db 0b01000001, 0b01000001
+    .db 0b00111110, 0b00000000
 
     ; S
-    .db 0b01000110
-    .db 0b01001001
-    .db 0b01001001
-    .db 0b01001001
-    .db 0b00110001
-    .db 0b00000000
+    .db 0b01000110, 0b01001001
+    .db 0b01001001, 0b01001001
+    .db 0b00110001, 0b00000000
 
-
-    ; espacio
+    ; Espacio
     .db 0x00, 0x00
 
-
     ; M
-    .db 0b01111111
-    .db 0b00000010
-    .db 0b00000100
-    .db 0b00000010
-    .db 0b01111111
-    .db 0b00000000
-
+    .db 0b01111111, 0b00000010
+    .db 0b00000100, 0b00000010
+    .db 0b01111111, 0b00000000
 
     ; A
-    .db 0b01111110
-    .db 0b00001001
-    .db 0b00001001
-    .db 0b00001001
-    .db 0b01111110
-    .db 0b00000000
-
+    .db 0b01111110, 0b00001001
+    .db 0b00001001, 0b00001001
+    .db 0b01111110, 0b00000000
 
     ; R
-    .db 0b01111111
-    .db 0b00001001
-    .db 0b00011001
-    .db 0b00101001
-    .db 0b01000110
-    .db 0b00000000
-
+    .db 0b01111111, 0b00001001
+    .db 0b00011001, 0b00101001
+    .db 0b01000110, 0b00000000
 
     ; C
-    .db 0b00111110
-    .db 0b01000001
-    .db 0b01000001
-    .db 0b01000001
-    .db 0b00100010
-    .db 0b00000000
-
+    .db 0b00111110, 0b01000001
+    .db 0b01000001, 0b01000001
+    .db 0b00100010, 0b00000000
 
     ; E
-    .db 0b01111111
-    .db 0b01001001
-    .db 0b01001001
-    .db 0b01001001
-    .db 0b01000001
-    .db 0b00000000
-
+    .db 0b01111111, 0b01001001
+    .db 0b01001001, 0b01001001
+    .db 0b01000001, 0b00000000
 
     ; L
-    .db 0b01111111
-    .db 0b01000000
-    .db 0b01000000
-    .db 0b01000000
-    .db 0b01000000
-    .db 0b00000000
-
+    .db 0b01111111, 0b01000000
+    .db 0b01000000, 0b01000000
+    .db 0b01000000, 0b00000000
 
     ; O
-    .db 0b00111110
-    .db 0b01000001
-    .db 0b01000001
-    .db 0b01000001
-    .db 0b00111110
-    .db 0b00000000
-
+    .db 0b00111110, 0b01000001
+    .db 0b01000001, 0b01000001
+    .db 0b00111110, 0b00000000
 
     ; O
-    .db 0b00111110
-    .db 0b01000001
-    .db 0b01000001
-    .db 0b01000001
-    .db 0b00111110
-    .db 0b00000000
-
+    .db 0b00111110, 0b01000001
+    .db 0b01000001, 0b01000001
+    .db 0b00111110, 0b00000000
 
     ; O
-    .db 0b00111110
-    .db 0b01000001
-    .db 0b01000001
-    .db 0b01000001
-    .db 0b00111110
-    .db 0b00000000
-
+    .db 0b00111110, 0b01000001
+    .db 0b01000001, 0b01000001
+    .db 0b00111110, 0b00000000
 
     ; O
-    .db 0b00111110
-    .db 0b01000001
-    .db 0b01000001
-    .db 0b01000001
-    .db 0b00111110
-    .db 0b00000000
-
+    .db 0b00111110, 0b01000001
+    .db 0b01000001, 0b01000001
+    .db 0b00111110, 0b00000000
 
     ; Espacio final
     .db 0x00, 0x00, 0x00, 0x00
