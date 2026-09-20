@@ -10,6 +10,9 @@
 ; Registros:
 .DEF TEMP   = R16                  ; Registro auxiliar
 .DEF ESTADO = R20                  ; Guarda el estado actual de la puerta
+.DEF DATO   = R17                  ; Carácter que se enviará por USART
+.DEF AVISO  = R21                  ; Bandera para avisar un obstáculo
+
 
 ; Vector de RESET:
 .ORG 0x0000
@@ -75,6 +78,23 @@ INICIO:
     LDI TEMP, (1<<PCIF0)           ; Preparar limpieza de bandera pendiente
     OUT PCIFR, TEMP                ; Limpiar posible interrupción anterior
 
+
+    ; Configuración USART: 9600 baudios, 8N1
+    LDI TEMP, HIGH(103)            ; Parte alta del valor para 9600 baudios
+    STS UBRR0H, TEMP               ; Configurar parte alta del baud rate
+
+    LDI TEMP, LOW(103)             ; Parte baja del valor para 9600 baudios
+    STS UBRR0L, TEMP               ; Configurar parte baja del baud rate
+
+    LDI TEMP, (1<<TXEN0)           ; Habilitar transmisión USART
+    STS UCSR0B, TEMP               ; Guardar configuración
+
+    LDI TEMP, (1<<UCSZ01)|(1<<UCSZ00) ; 8 bits, sin paridad, 1 stop
+    STS UCSR0C, TEMP               ; Configurar formato de transmisión
+
+    CLR AVISO                      ; Al iniciar no existe aviso de obstáculo
+
+
     LDI ESTADO, CERRADA            ; La puerta comienza en estado CERRADA
 
     SEI                            ; Habilitar interrupciones globalmente
@@ -82,6 +102,18 @@ INICIO:
 
 ; Bucle principal:
 PRINCIPAL:
+
+
+    CPI AVISO, 1                   ; ¿Hay aviso de obstáculo pendiente?
+    BRNE SIN_AVISO                 ; No ? continuar normalmente
+
+    RCALL MENSAJE_OBSTACULO        ; Enviar "Obstaculo detectado"
+    RCALL MENSAJE_SEGURIDAD        ; Enviar mensaje de seguridad
+
+    CLR AVISO                      ; Aviso enviado, volver a 0
+
+
+SIN_AVISO:
 
     CPI ESTADO, CERRADA            ; ¿Estado = CERRADA?
     BREQ ESTADO_CERRADA            ; Sí ? ir a ESTADO_CERRADA
@@ -112,6 +144,9 @@ ESTADO_CERRADA:
     RJMP PRINCIPAL                 ; Si no se pulsó ABRIR, seguir esperando
 
     LDI ESTADO, ABRIENDO           ; Botón ABRIR pulsado ? cambiar estado
+
+    RCALL MENSAJE_ABRIENDO         ; USART: "Puerta abriendo"
+
     RJMP PRINCIPAL                 ; Volver al control principal
 
 
@@ -129,6 +164,9 @@ ESTADO_ABRIENDO:
     CBI PORTB, PORTB3              ; Apagar alarma
 
     LDI ESTADO, ABIERTA            ; Cambiar estado a ABIERTA
+
+    RCALL MENSAJE_ABIERTA          ; USART: "Puerta abierta"
+
     RJMP PRINCIPAL                 ; Volver al control principal
 
 
@@ -143,6 +181,9 @@ ESTADO_ABIERTA:
     RJMP PRINCIPAL                 ; Si no se pulsó, seguir esperando
 
     LDI ESTADO, CERRANDO           ; Botón CERRAR pulsado ? cambiar estado
+
+    RCALL MENSAJE_CERRANDO         ; USART: "Puerta cerrando"
+
     RJMP PRINCIPAL                 ; Volver al control principal
 
 
@@ -160,7 +201,11 @@ ESTADO_CERRANDO:
     CBI PORTB, PORTB3              ; Apagar alarma
 
     LDI ESTADO, CERRADA            ; Cambiar estado a CERRADA
+
+    RCALL MENSAJE_CERRADA          ; USART: "Puerta cerrada"
+
     RJMP PRINCIPAL                 ; Volver al control principal
+
 
 
 ; Estado: SEGURIDAD
@@ -183,6 +228,9 @@ SEGURIDAD_LIBRE:
     RJMP COMPROBAR_CERRAR          ; No ? comprobar botón CERRAR
 
     LDI ESTADO, ABRIENDO           ; Nueva orden: volver a abrir
+
+    RCALL MENSAJE_ABRIENDO
+
     RJMP PRINCIPAL
 
 
@@ -193,6 +241,7 @@ COMPROBAR_CERRAR:
 
     LDI ESTADO, CERRANDO           ; Nueva orden: volver a cerrar
 
+    RCALL MENSAJE_CERRANDO
 
     RJMP PRINCIPAL                 ; Por ahora permanece detenido
 
@@ -226,6 +275,8 @@ ISR_DETENER:
 
     LDI ESTADO, SEGURIDAD          ; Pasar al estado de seguridad
 
+    LDI TEMP, 1                    ; Marcar que existe un aviso pendiente
+    MOV AVISO, TEMP                ; AVISO = 1
 
 ISR_SALIR:
 
@@ -235,3 +286,112 @@ ISR_SALIR:
     POP TEMP                       ; Recuperar valor original de R16
 
     RETI                           ; Volver del servicio de interrupción
+
+
+; USART: enviar un carácter
+USART_TX:
+
+    LDS TEMP, UCSR0A               ; Leer estado de USART
+    SBRS TEMP, UDRE0               ; ¿Registro de transmisión disponible?
+    RJMP USART_TX                  ; No ? esperar
+
+    STS UDR0, DATO                 ; Sí ? enviar carácter
+
+    RET                            ; Volver a la subrutina anterior
+
+
+; USART: enviar texto apuntado por Z
+USART_TEXTO:
+
+    LPM DATO, Z+                   ; Leer un carácter desde memoria de programa
+
+    TST DATO                       ; ¿El carácter es 0?
+    BREQ USART_TEXTO_FIN           ; Sí ? terminó el texto
+
+    RCALL USART_TX                 ; Enviar carácter
+    RJMP USART_TEXTO               ; Buscar el siguiente
+
+
+USART_TEXTO_FIN:
+
+    RET                            ; Volver
+
+
+; Mensaje: puerta abriendo
+MENSAJE_ABRIENDO:
+
+    LDI ZH, HIGH(TEXTO_ABRIENDO<<1)    ; Z apunta al texto "Puerta abriendo"
+    LDI ZL, LOW(TEXTO_ABRIENDO<<1)
+    RCALL USART_TEXTO                   ; Enviar el texto por USART
+
+    RET                                 ; Volver
+
+
+; Mensaje: puerta abierta
+MENSAJE_ABIERTA:
+
+    LDI ZH, HIGH(TEXTO_ABIERTA<<1)     ; Z apunta al texto "Puerta abierta"
+    LDI ZL, LOW(TEXTO_ABIERTA<<1)
+    RCALL USART_TEXTO                   ; Enviar el texto por USART
+
+    RET                                 ; Volver
+
+
+; Mensaje: puerta cerrando
+MENSAJE_CERRANDO:
+
+    LDI ZH, HIGH(TEXTO_CERRANDO<<1)    ; Z apunta al texto "Puerta cerrando"
+    LDI ZL, LOW(TEXTO_CERRANDO<<1)
+    RCALL USART_TEXTO                   ; Enviar el texto por USART
+
+    RET                                 ; Volver
+
+
+; Mensaje: puerta cerrada
+MENSAJE_CERRADA:
+
+    LDI ZH, HIGH(TEXTO_CERRADA<<1)     ; Z apunta al texto "Puerta cerrada"
+    LDI ZL, LOW(TEXTO_CERRADA<<1)
+    RCALL USART_TEXTO                   ; Enviar el texto por USART
+
+    RET                                 ; Volver
+
+
+; Mensaje: obstáculo detectado
+MENSAJE_OBSTACULO:
+
+    LDI ZH, HIGH(TEXTO_OBSTACULO<<1)   ; Z apunta al texto del obstáculo
+    LDI ZL, LOW(TEXTO_OBSTACULO<<1)
+    RCALL USART_TEXTO                   ; Enviar el texto por USART
+
+    RET                                 ; Volver
+
+
+; Mensaje: seguridad
+MENSAJE_SEGURIDAD:
+
+    LDI ZH, HIGH(TEXTO_SEGURIDAD<<1)   ; Z apunta al texto de seguridad
+    LDI ZL, LOW(TEXTO_SEGURIDAD<<1)
+    RCALL USART_TEXTO                   ; Enviar el texto por USART
+
+    RET                                 ; Volver
+
+
+; Textos USART:
+TEXTO_ABRIENDO:
+    .DB "Puerta abriendo", 13, 10, 0
+
+TEXTO_ABIERTA:
+    .DB "Puerta abierta", 13, 10, 0, 0
+
+TEXTO_CERRANDO:
+    .DB "Puerta cerrando", 13, 10, 0
+
+TEXTO_CERRADA:
+    .DB "Puerta cerrada", 13, 10, 0, 0
+
+TEXTO_OBSTACULO:
+    .DB "Obstaculo detectado", 13, 10, 0
+
+TEXTO_SEGURIDAD:
+    .DB "Movimiento detenido por seguridad", 13, 10, 0
