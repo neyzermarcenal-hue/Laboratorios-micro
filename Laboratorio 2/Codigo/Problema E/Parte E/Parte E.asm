@@ -97,6 +97,8 @@ INICIO:
 
     LDI ESTADO, CERRADA            ; La puerta comienza en estado CERRADA
 
+	RCALL MENSAJE_CERRADA          ; USART: informar estado inicial
+
     SEI                            ; Habilitar interrupciones globalmente
 
 
