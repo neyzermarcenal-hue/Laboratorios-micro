@@ -16,8 +16,17 @@
     RJMP INICIO                    ; Al encender/resetear, ir a INICIO
 
 
+.ORG 0x0006
+    RJMP ISR_OBSTACULO             ; Vector de interrupción PCINT0
+
+.ORG 0x0034                        ; El programa principal empieza después de los vectores
+
+
+
 ; Inicio:
 INICIO:
+
+    CLI                            ; Deshabilita interrupciones mientras configuramos	
 
     LDI TEMP, HIGH(RAMEND)         ; Carga la parte alta del final de la SRAM
     OUT SPH, TEMP                  ; Configura parte alta del Stack Pointer
@@ -54,7 +63,21 @@ INICIO:
     CBI PORTB, PORTB2              ; Motor CERRAR apagado
     CBI PORTB, PORTB3              ; Alarma apagada
 
+    ; Interrupción del sensor de obstáculo:
+    LDS TEMP, PCICR                ; Leer registro de control de PCINT
+    ORI TEMP, (1<<PCIE0)           ; Habilitar grupo de interrupciones de PORTB
+    STS PCICR, TEMP                ; Guardar configuración
+
+    LDS TEMP, PCMSK0               ; Leer máscara de interrupciones de PORTB
+    ORI TEMP, (1<<PCINT0)          ; Habilitar PB0 como fuente de interrupción
+    STS PCMSK0, TEMP               ; Guardar configuración
+
+    LDI TEMP, (1<<PCIF0)           ; Preparar limpieza de bandera pendiente
+    OUT PCIFR, TEMP                ; Limpiar posible interrupción anterior
+
     LDI ESTADO, CERRADA            ; La puerta comienza en estado CERRADA
+
+    SEI                            ; Habilitar interrupciones globalmente
 
 
 ; Bucle principal:
@@ -147,4 +170,68 @@ ESTADO_SEGURIDAD:
     CBI PORTB, PORTB2              ; Detener cierre
     CBI PORTB, PORTB3              ; Apagar alarma
 
+
+    SBIC PINB, PINB0               ; ¿Ya desapareció el obstáculo?
+    RJMP SEGURIDAD_LIBRE           ; Si PB0 = 1, permitir nueva orden
+
+    RJMP PRINCIPAL                 ; Si sigue el obstáculo, permanecer detenido
+
+
+SEGURIDAD_LIBRE:
+
+    SBIC PIND, PIND4               ; ¿Se pulsó ABRIR?
+    RJMP COMPROBAR_CERRAR          ; No ? comprobar botón CERRAR
+
+    LDI ESTADO, ABRIENDO           ; Nueva orden: volver a abrir
+    RJMP PRINCIPAL
+
+
+COMPROBAR_CERRAR:
+
+    SBIC PIND, PIND5               ; ¿Se pulsó CERRAR?
+    RJMP PRINCIPAL                 ; No ? permanecer esperando
+
+    LDI ESTADO, CERRANDO           ; Nueva orden: volver a cerrar
+
+
     RJMP PRINCIPAL                 ; Por ahora permanece detenido
+
+
+
+; Interrupción: obstáculo
+ISR_OBSTACULO:
+
+    PUSH TEMP                      ; Guardar R16 antes de modificarlo
+
+    IN TEMP, SREG                  ; Leer registro de estado
+    PUSH TEMP                      ; Guardar SREG en el Stack
+
+    SBIC PINB, PINB0               ; Si PB0 = 0 hay obstáculo
+    RJMP ISR_SALIR                 ; Si PB0 = 1, fue liberado y salimos
+
+    CPI ESTADO, ABRIENDO           ; ¿La puerta estaba abriendo?
+    BREQ ISR_DETENER               ; Sí ? detener
+
+    CPI ESTADO, CERRANDO           ; ¿La puerta estaba cerrando?
+    BREQ ISR_DETENER               ; Sí ? detener
+
+    RJMP ISR_SALIR                 ; Si estaba quieta, no hacer nada
+
+
+ISR_DETENER:
+
+    CBI PORTB, PORTB1              ; Detener motor de apertura
+    CBI PORTB, PORTB2              ; Detener motor de cierre
+    CBI PORTB, PORTB3              ; Apagar alarma
+
+    LDI ESTADO, SEGURIDAD          ; Pasar al estado de seguridad
+
+
+ISR_SALIR:
+
+    POP TEMP                       ; Recuperar SREG
+    OUT SREG, TEMP                 ; Restaurar registro de estado
+
+    POP TEMP                       ; Recuperar valor original de R16
+
+    RETI                           ; Volver del servicio de interrupción
