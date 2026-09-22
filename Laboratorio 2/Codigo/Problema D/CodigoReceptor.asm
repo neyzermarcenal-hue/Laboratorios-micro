@@ -53,6 +53,43 @@ wait_rx:
     ; Filtrar la máscara: conservar los 3 bits inferiores (0 a 7)
     andi r16, 0x07
 
-	out PORTC, r16
+    ;DECODIFICADOR 3 A 8 
+    ldi r17, 1
+    mov r18, r16
 
+    ; Si el valor recibido es 0, no hay desplazamientos que realizar
+    cpi r18, 0
+    breq mapear_salida
+
+shift_loop:
+    lsl r17
+    dec r18
+    brne shift_loop
+
+;Selecciona y activa el puerto a utilizar
+mapear_salida:
+    cpi r16, 6
+    brlo enviar_portc
+
+; Caso A: Valores 6 o 7 (LED 6 -> D8, LED 7 -> D9)
+enviar_portb:
+    clr r19
+    out PORTC, r19
+
+    lsr r17
+    lsr r17
+    lsr r17
+    lsr r17
+    lsr r17
+    lsr r17
+
+    out PORTB, r17
+    rjmp loop_rx
+
+; Caso B: Valores 0 a 5 (LEDs A0 a A5)
+enviar_portc:
+    clr r19
+    out PORTB, r19
+
+    out PORTC, r17
     rjmp loop_rx
