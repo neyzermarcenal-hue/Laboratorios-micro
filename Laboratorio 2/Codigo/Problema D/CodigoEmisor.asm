@@ -39,6 +39,10 @@ main:
 loop_tx:
     ; Primera prueba: Leer el puerto D completo y enviarlo
     in r16, PIND
+	; Ajustar los bits PD2, PD3 y PD4 a la posición 0, 1 y 2
+    lsr r16
+    lsr r16
+    andi r16, 0x07  ; Conservar solo el valor de 3 bits (0 a 7)
 
 wait_tx:
     ; Esperar a que el buffer de transmisión esté listo
