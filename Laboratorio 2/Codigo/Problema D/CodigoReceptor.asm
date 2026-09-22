@@ -53,4 +53,6 @@ wait_rx:
     ; Filtrar la máscara: conservar los 3 bits inferiores (0 a 7)
     andi r16, 0x07
 
+	out PORTC, r16
+
     rjmp loop_rx
