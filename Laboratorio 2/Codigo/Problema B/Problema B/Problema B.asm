@@ -78,7 +78,7 @@ INICIO:
 
     ; Selección inicial:
     LDI OPCION, '1'                ; Al iniciar seleccionar Señal 11
-
+    LDI VELOCIDAD, 1               ; Nivel medio de velocidad al iniciar
     RCALL MOSTRAR_MENU             ; Mostrar menú por USART
 
 
@@ -272,6 +272,12 @@ REVISAR_UART:
     CPI DATO, '2'                  ; ¿Usuario escribió 2?
     BREQ SELECCION_3               ; Sí ? seleccionar Señal 3
 
+    CPI DATO, '+'                  ; ¿Usuario quiere más velocidad?
+    BREQ MAS_RAPIDO
+
+    CPI DATO, '-'                  ; ¿Usuario quiere menos velocidad?
+    BREQ MAS_LENTO
+
     CPI DATO, 'M'                  ; ¿Usuario escribió M?
     BREQ MOSTRAR_MENU_UART
 
@@ -292,6 +298,37 @@ SELECCION_3:
     LDI OPCION, '2'                ; Guardar selección de Señal 3
     RET
 
+; Aumentar velocidad:
+MAS_RAPIDO:
+
+    CPI VELOCIDAD, 2               ; ¿Ya estamos en nivel máximo?
+    BREQ FIN_MAS_RAPIDO            ; Sí ? no aumentar más
+
+    INC VELOCIDAD                  ; Subir un nivel
+
+    RCALL CONFIG_VELOCIDAD         ; Actualizar Timer1
+
+
+FIN_MAS_RAPIDO:
+
+    RET
+
+
+; Disminuir velocidad:
+MAS_LENTO:
+
+    CPI VELOCIDAD, 0               ; ¿Ya estamos en nivel mínimo?
+    BREQ FIN_MAS_LENTO             ; Sí ? no disminuir más
+
+    DEC VELOCIDAD                  ; Bajar un nivel
+
+    RCALL CONFIG_VELOCIDAD         ; Actualizar Timer1
+
+
+FIN_MAS_LENTO:
+
+    RET
+
 
 MOSTRAR_MENU_UART:
 
@@ -299,6 +336,64 @@ MOSTRAR_MENU_UART:
     RET
 
 
+; Configurar velocidad del Timer1:
+CONFIG_VELOCIDAD:
+
+    CPI VELOCIDAD, 0               ; ¿Nivel lento?
+    BREQ VELOCIDAD_LENTA
+
+    CPI VELOCIDAD, 1               ; ¿Nivel medio?
+    BREQ VELOCIDAD_MEDIA
+
+    RJMP VELOCIDAD_RAPIDA          ; Si no, nivel rápido
+
+
+; Velocidad lenta:
+VELOCIDAD_LENTA:
+
+    LDI TEMP, HIGH(499)            ; 499 ? aproximadamente 2 ms
+    STS OCR1AH, TEMP
+
+    LDI TEMP, LOW(499)
+    STS OCR1AL, TEMP
+
+    RJMP REINICIAR_TIMER
+
+
+; Velocidad media:
+VELOCIDAD_MEDIA:
+
+    LDI TEMP, HIGH(249)            ; 249 ? aproximadamente 1 ms
+    STS OCR1AH, TEMP
+
+    LDI TEMP, LOW(249)
+    STS OCR1AL, TEMP
+
+    RJMP REINICIAR_TIMER
+
+
+; Velocidad rápida:
+VELOCIDAD_RAPIDA:
+
+    LDI TEMP, HIGH(124)            ; 124 ? aproximadamente 0.5 ms
+    STS OCR1AH, TEMP
+
+    LDI TEMP, LOW(124)
+    STS OCR1AL, TEMP
+
+
+; Reiniciar Timer después del cambio:
+REINICIAR_TIMER:
+
+    CLR TEMP                       ; TEMP = 0
+
+    STS TCNT1H, TEMP               ; Reiniciar parte alta
+    STS TCNT1L, TEMP               ; Reiniciar parte baja
+
+    LDI TEMP, (1<<OCF1A)           ; Limpiar bandera de comparación
+    OUT TIFR1, TEMP
+
+    RET
 
 
 ; LUT Señal 11:
@@ -347,4 +442,4 @@ LUT_3:
 ; Menú USART:
 TEXTO_MENU:
 
-    .DB 13,10,"DAC R-2R",13,10,"1 - Senal 11",13,10,"2 - Senal 3",13,10,"M - Menu",13,10,0,0,0
+    .DB 13,10,"DAC R-2R",13,10,"1 - Senal 11",13,10,"2 - Senal 3",13,10,"+ - Mas rapido",13,10,"- - Mas lento",13,10,"M - Menu",13,10,0,0
