@@ -1333,8 +1333,4 @@ delay_rele_int:
 
 MENU:
 
-    .db 13,10,"PLOTTER UTEC",13,10
-    .db "1 - Triangulo",13,10,"2 - Circulo",13,10
-    .db "3 - Pentagrama",13,10,"4 - Figura libre",13,10
-    .db "P - Gengar",13,10,"T - Todas",13,10
-    .db "Seleccione: ",0,0
+ .db 13,10,"PLOTTER UTEC",13,10,"1 - Triangulo",13,10,"2 - Circulo",13,10,"3 - Pentagrama",13,10,"4 - Figura libre",13,10,"P - Gengar",13,10,"T - Todas",13,10,"Seleccione: ",0
