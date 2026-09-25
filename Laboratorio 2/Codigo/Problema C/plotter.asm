@@ -129,21 +129,21 @@ lapiz_arriba:
 
 opcion_1:
 
-    ; dibujar triangulo
+    rcall dibujar_triangulo
 
     rjmp volver_menu
 
 
 opcion_2:
 
-    ; dibujar circulo
+    rcall dibujar_circulo
 
     rjmp volver_menu
 
 
 opcion_3:
 
-    ; dibujar pentagrama
+    rcall dibujar_pentagrama
 
     rjmp volver_menu
 
@@ -310,6 +310,137 @@ mover_derecha:
 
     ret
 
+;==================================================
+; MOVIMIENTOS DIAGONALES
+;==================================================
+
+diagonal_abajo_derecha:
+
+    sbi PORTD, PD7
+    rcall delay_paso
+    cbi PORTD, PD7
+
+    sbi PORTD, PD4
+    rcall delay_paso
+    cbi PORTD, PD4
+
+    ret
+
+
+diagonal_abajo_izquierda:
+
+    sbi PORTD, PD6
+    rcall delay_paso
+    cbi PORTD, PD6
+
+    sbi PORTD, PD4
+    rcall delay_paso
+    cbi PORTD, PD4
+
+    ret
+
+
+diagonal_arriba_derecha:
+
+    sbi PORTD, PD7
+    rcall delay_paso
+    cbi PORTD, PD7
+
+    sbi PORTD, PD5
+    rcall delay_paso
+    cbi PORTD, PD5
+
+    ret
+
+
+diagonal_arriba_izquierda:
+
+    sbi PORTD, PD6
+    rcall delay_paso
+    cbi PORTD, PD6
+
+    sbi PORTD, PD5
+    rcall delay_paso
+    cbi PORTD, PD5
+
+    ret
+
+;==================================================
+; FIGURA 1 - TRIANGULO
+;==================================================
+
+dibujar_triangulo:
+
+    ; Bajar lapiz
+    rcall lapiz_abajo
+
+
+    ; Primer lado diagonal abajo-izquierda
+
+    ldi r21, 20
+
+triangulo_lado1:
+
+    rcall diagonal_abajo_izquierda
+
+    dec r21
+    brne triangulo_lado1
+
+
+    ; Base hacia la derecha
+
+    ldi r21, 40
+
+triangulo_base:
+
+    sbi PORTD, PD7
+    rcall delay_paso
+    cbi PORTD, PD7
+
+    dec r21
+    brne triangulo_base
+
+
+    ; Segundo lado diagonal arriba-izquierda
+
+    ldi r21, 20
+
+triangulo_lado2:
+
+    rcall diagonal_arriba_izquierda
+
+    dec r21
+    brne triangulo_lado2
+
+
+    ; Subir lapiz
+
+    rcall lapiz_arriba
+
+    ret
+
+;==================================================
+; RETARDO PARA PASOS PEQUEÑOS
+;==================================================
+
+delay_paso:
+
+    ldi r18, 2
+
+delay_paso_ext:
+
+    ldi r19, 255
+
+delay_paso_int:
+
+    dec r19
+    brne delay_paso_int
+
+    dec r18
+    brne delay_paso_ext
+
+    ret
+
 
 ;==================================================
 ; RETARDO PARA MOVIMIENTO
@@ -337,6 +468,238 @@ delay_mov_int:
 
     dec r18
     brne delay_mov_ext
+
+    ret
+
+;==================================================
+; FIGURA 2 - CIRCULO
+;==================================================
+
+dibujar_circulo:
+
+    ; Bajar lapiz
+    rcall lapiz_abajo
+
+
+    ;----------------------------------------------
+    ; Parte superior hacia la izquierda
+    ;----------------------------------------------
+
+    ldi r21, 6
+
+circulo_1:
+
+    sbi PORTD, PD6
+    rcall delay_paso
+    cbi PORTD, PD6
+
+    dec r21
+    brne circulo_1
+
+
+    ;----------------------------------------------
+    ; Curva superior izquierda
+    ;----------------------------------------------
+
+    ldi r21, 8
+
+circulo_2:
+
+    rcall diagonal_abajo_izquierda
+
+    dec r21
+    brne circulo_2
+
+
+    ;----------------------------------------------
+    ; Lado izquierdo
+    ;----------------------------------------------
+
+    ldi r21, 6
+
+circulo_3:
+
+    sbi PORTD, PD4
+    rcall delay_paso
+    cbi PORTD, PD4
+
+    dec r21
+    brne circulo_3
+
+
+    ;----------------------------------------------
+    ; Curva inferior izquierda
+    ;----------------------------------------------
+
+    ldi r21, 8
+
+circulo_4:
+
+    rcall diagonal_abajo_derecha
+
+    dec r21
+    brne circulo_4
+
+
+    ;----------------------------------------------
+    ; Parte inferior
+    ;----------------------------------------------
+
+    ldi r21, 6
+
+circulo_5:
+
+    sbi PORTD, PD7
+    rcall delay_paso
+    cbi PORTD, PD7
+
+    dec r21
+    brne circulo_5
+
+
+    ;----------------------------------------------
+    ; Curva inferior derecha
+    ;----------------------------------------------
+
+    ldi r21, 8
+
+circulo_6:
+
+    rcall diagonal_arriba_derecha
+
+    dec r21
+    brne circulo_6
+
+
+    ;----------------------------------------------
+    ; Lado derecho
+    ;----------------------------------------------
+
+    ldi r21, 6
+
+circulo_7:
+
+    sbi PORTD, PD5
+    rcall delay_paso
+    cbi PORTD, PD5
+
+    dec r21
+    brne circulo_7
+
+
+    ;----------------------------------------------
+    ; Curva superior derecha
+    ;----------------------------------------------
+
+    ldi r21, 8
+
+circulo_8:
+
+    rcall diagonal_arriba_izquierda
+
+    dec r21
+    brne circulo_8
+
+
+    ; Subir lapiz
+
+    rcall lapiz_arriba
+
+    ret
+
+;==================================================
+; FIGURA 3 - PENTAGRAMA
+;==================================================
+
+dibujar_pentagrama:
+
+    ; Bajar lapiz
+
+    rcall lapiz_abajo
+
+
+    ;----------------------------------------------
+    ; Linea 1
+    ; Desde arriba hacia abajo-izquierda
+    ;----------------------------------------------
+
+    ldi r21, 20
+
+pentagrama_1:
+
+    rcall diagonal_abajo_izquierda
+
+    dec r21
+    brne pentagrama_1
+
+
+    ;----------------------------------------------
+    ; Linea 2
+    ; Hacia la derecha
+    ;----------------------------------------------
+
+    ldi r21, 35
+
+pentagrama_2:
+
+    sbi PORTD, PD7
+    rcall delay_paso
+    cbi PORTD, PD7
+
+    dec r21
+    brne pentagrama_2
+
+
+    ;----------------------------------------------
+    ; Linea 3
+    ; Arriba-izquierda
+    ;----------------------------------------------
+
+    ldi r21, 20
+
+pentagrama_3:
+
+    rcall diagonal_arriba_izquierda
+
+    dec r21
+    brne pentagrama_3
+
+
+    ;----------------------------------------------
+    ; Linea 4
+    ; Abajo-izquierda
+    ; Cruza el centro
+    ;----------------------------------------------
+
+    ldi r21, 28
+
+pentagrama_4:
+
+    rcall diagonal_abajo_izquierda
+
+    dec r21
+    brne pentagrama_4
+
+
+    ;----------------------------------------------
+    ; Linea 5
+    ; Arriba-derecha
+    ; Regresa hacia el inicio
+    ;----------------------------------------------
+
+    ldi r21, 28
+
+pentagrama_5:
+
+    rcall diagonal_arriba_derecha
+
+    dec r21
+    brne pentagrama_5
+
+
+    ; Subir lapiz
+
+    rcall lapiz_arriba
 
     ret
 
