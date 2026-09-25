@@ -101,28 +101,6 @@ loop:
 
     rjmp loop
 
-
-;==================================================
-; CONTROL DEL LAPIZ
-;==================================================
-
-lapiz_abajo:
-
-    sbi PORTD, PD2       ; Activa bajar solenoide
-    rcall delay_rele
-    cbi PORTD, PD2       ; Desactiva salida
-
-    ret
-
-
-lapiz_arriba:
-
-    sbi PORTD, PD3       ; Activa subir solenoide
-    rcall delay_rele
-    cbi PORTD, PD3       ; Desactiva salida
-
-    ret
-
 ;==================================================
 ; OPCIONES DEL MENU
 ;==================================================
@@ -1011,6 +989,41 @@ gengar_silueta_15:
 
     ret
 
+    ;==============================================
+    ; POSICIONAR EN OJO IZQUIERDO
+    ;==============================================
+
+    ldi r21, 18
+    rcall pasos_izquierda
+
+    ldi r21, 15
+    rcall pasos_abajo
+
+    rcall gengar_ojo_izquierdo
+
+
+    ;==============================================
+    ; POSICIONAR EN OJO DERECHO
+    ;==============================================
+
+    ldi r21, 18
+    rcall pasos_derecha
+
+    rcall gengar_ojo_derecho
+
+
+    ;==============================================
+    ; POSICIONAR EN LA BOCA
+    ;==============================================
+
+    ldi r21, 20
+    rcall pasos_izquierda
+
+    ldi r21, 12
+    rcall pasos_abajo
+
+    rcall gengar_boca
+
 ;==================================================
 ; OJO IZQUIERDO DE GENGAR
 ;==================================================
@@ -1150,43 +1163,6 @@ boca_2:
 
 
     rcall lapiz_arriba
-
-    ;==============================================
-    ; POSICIONAR EN OJO IZQUIERDO
-    ;==============================================
-
-    ldi r21, 18
-    rcall pasos_izquierda
-
-    ldi r21, 15
-    rcall pasos_abajo
-
-    rcall gengar_ojo_izquierdo
-
-
-    ;==============================================
-    ; POSICIONAR EN OJO DERECHO
-    ;==============================================
-
-    ldi r21, 18
-    rcall pasos_derecha
-
-    rcall gengar_ojo_derecho
-
-
-    ;==============================================
-    ; POSICIONAR EN LA BOCA
-    ;==============================================
-
-    ldi r21, 20
-    rcall pasos_izquierda
-
-    ldi r21, 12
-    rcall pasos_abajo
-
-    rcall gengar_boca
-
-
     ret
 
 ;==================================================
