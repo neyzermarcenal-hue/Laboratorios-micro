@@ -150,21 +150,21 @@ opcion_3:
 
 opcion_4:
 
-    ; dibujar figura libre
+    rcall dibujar_libre
 
     rjmp volver_menu
 
 
 opcion_P:
 
-    ; dibujar Gengar
+    rcall dibujar_gengar
 
     rjmp volver_menu
 
 
 opcion_T:
 
-    ; dibujar todas las figuras
+    rcall dibujar_todas
 
     rjmp volver_menu
 
@@ -366,6 +366,66 @@ diagonal_arriba_izquierda:
     ret
 
 ;==================================================
+; MOVIMIENTOS DE POSICIONAMIENTO
+; r21 = cantidad de pasos
+;==================================================
+
+pasos_abajo:
+
+pasos_abajo_loop:
+
+    sbi PORTD, PD4
+    rcall delay_paso
+    cbi PORTD, PD4
+
+    dec r21
+    brne pasos_abajo_loop
+
+    ret
+
+
+pasos_arriba:
+
+pasos_arriba_loop:
+
+    sbi PORTD, PD5
+    rcall delay_paso
+    cbi PORTD, PD5
+
+    dec r21
+    brne pasos_arriba_loop
+
+    ret
+
+
+pasos_izquierda:
+
+pasos_izquierda_loop:
+
+    sbi PORTD, PD6
+    rcall delay_paso
+    cbi PORTD, PD6
+
+    dec r21
+    brne pasos_izquierda_loop
+
+    ret
+
+
+pasos_derecha:
+
+pasos_derecha_loop:
+
+    sbi PORTD, PD7
+    rcall delay_paso
+    cbi PORTD, PD7
+
+    dec r21
+    brne pasos_derecha_loop
+
+    ret
+
+;==================================================
 ; FIGURA 1 - TRIANGULO
 ;==================================================
 
@@ -416,58 +476,6 @@ triangulo_lado2:
     ; Subir lapiz
 
     rcall lapiz_arriba
-
-    ret
-
-;==================================================
-; RETARDO PARA PASOS PEQUEÑOS
-;==================================================
-
-delay_paso:
-
-    ldi r18, 2
-
-delay_paso_ext:
-
-    ldi r19, 255
-
-delay_paso_int:
-
-    dec r19
-    brne delay_paso_int
-
-    dec r18
-    brne delay_paso_ext
-
-    ret
-
-
-;==================================================
-; RETARDO PARA MOVIMIENTO
-;==================================================
-
-delay_movimiento:
-
-    ldi r18, 20
-
-delay_mov_ext:
-
-    ldi r19, 255
-
-delay_mov_med:
-
-    ldi r20, 255
-
-delay_mov_int:
-
-    dec r20
-    brne delay_mov_int
-
-    dec r19
-    brne delay_mov_med
-
-    dec r18
-    brne delay_mov_ext
 
     ret
 
@@ -702,6 +710,609 @@ pentagrama_5:
     rcall lapiz_arriba
 
     ret
+
+
+;==================================================
+; FIGURA 4 - FIGURA LIBRE: CORAZON
+;==================================================
+
+dibujar_libre:
+
+    ; Bajar lapiz
+    rcall lapiz_abajo
+
+
+    ;----------------------------------------------
+    ; Desde el centro superior hacia arriba-izquierda
+    ;----------------------------------------------
+
+    ldi r21, 8
+
+corazon_1:
+
+    rcall diagonal_arriba_izquierda
+
+    dec r21
+    brne corazon_1
+
+
+    ;----------------------------------------------
+    ; Parte superior izquierda
+    ;----------------------------------------------
+
+    ldi r21, 8
+
+corazon_2:
+
+    rcall diagonal_abajo_izquierda
+
+    dec r21
+    brne corazon_2
+
+
+    ;----------------------------------------------
+    ; Lado izquierdo hacia la punta inferior
+    ;----------------------------------------------
+
+    ldi r21, 16
+
+corazon_3:
+
+    rcall diagonal_abajo_derecha
+
+    dec r21
+    brne corazon_3
+
+
+    ;----------------------------------------------
+    ; Desde la punta inferior hacia lado derecho
+    ;----------------------------------------------
+
+    ldi r21, 16
+
+corazon_4:
+
+    rcall diagonal_arriba_derecha
+
+    dec r21
+    brne corazon_4
+
+
+    ;----------------------------------------------
+    ; Parte superior derecha
+    ;----------------------------------------------
+
+    ldi r21, 8
+
+corazon_5:
+
+    rcall diagonal_arriba_izquierda
+
+    dec r21
+    brne corazon_5
+
+
+    ;----------------------------------------------
+    ; Volver al centro superior
+    ;----------------------------------------------
+
+    ldi r21, 8
+
+corazon_6:
+
+    rcall diagonal_abajo_izquierda
+
+    dec r21
+    brne corazon_6
+
+
+    ; Subir lapiz
+    rcall lapiz_arriba
+
+    ret
+
+;==================================================
+; POKEMON - GENGAR
+;==================================================
+
+dibujar_gengar:
+
+    ;----------------------------------------------
+    ; SILUETA
+    ; Comenzamos en la parte superior central
+    ;----------------------------------------------
+
+    rcall lapiz_abajo
+
+
+    ; Hacia oreja izquierda
+
+    ldi r21, 10
+
+gengar_silueta_1:
+
+    rcall diagonal_arriba_izquierda
+
+    dec r21
+    brne gengar_silueta_1
+
+
+    ; Punta de oreja izquierda hacia afuera
+
+    ldi r21, 8
+
+gengar_silueta_2:
+
+    rcall diagonal_abajo_izquierda
+
+    dec r21
+    brne gengar_silueta_2
+
+
+    ; Lado izquierdo de la cabeza
+
+    ldi r21, 10
+
+gengar_silueta_3:
+
+    rcall diagonal_abajo_izquierda
+
+    dec r21
+    brne gengar_silueta_3
+
+
+    ; Lateral izquierdo del cuerpo
+
+    ldi r21, 12
+
+gengar_silueta_4:
+
+    sbi PORTD, PD4
+    rcall delay_paso
+    cbi PORTD, PD4
+
+    dec r21
+    brne gengar_silueta_4
+
+
+    ; Parte inferior izquierda
+
+    ldi r21, 10
+
+gengar_silueta_5:
+
+    rcall diagonal_abajo_derecha
+
+    dec r21
+    brne gengar_silueta_5
+
+
+    ; Primera pata / punta inferior
+
+    ldi r21, 6
+
+gengar_silueta_6:
+
+    rcall diagonal_arriba_derecha
+
+    dec r21
+    brne gengar_silueta_6
+
+
+    ldi r21, 6
+
+gengar_silueta_7:
+
+    rcall diagonal_abajo_derecha
+
+    dec r21
+    brne gengar_silueta_7
+
+
+    ; Centro inferior
+
+    ldi r21, 12
+
+gengar_silueta_8:
+
+    sbi PORTD, PD7
+    rcall delay_paso
+    cbi PORTD, PD7
+
+    dec r21
+    brne gengar_silueta_8
+
+
+    ; Segunda punta inferior
+
+    ldi r21, 6
+
+gengar_silueta_9:
+
+    rcall diagonal_arriba_derecha
+
+    dec r21
+    brne gengar_silueta_9
+
+
+    ldi r21, 6
+
+gengar_silueta_10:
+
+    rcall diagonal_abajo_derecha
+
+    dec r21
+    brne gengar_silueta_10
+
+
+    ; Parte inferior derecha
+
+    ldi r21, 10
+
+gengar_silueta_11:
+
+    rcall diagonal_arriba_derecha
+
+    dec r21
+    brne gengar_silueta_11
+
+
+    ; Lateral derecho
+
+    ldi r21, 12
+
+gengar_silueta_12:
+
+    sbi PORTD, PD5
+    rcall delay_paso
+    cbi PORTD, PD5
+
+    dec r21
+    brne gengar_silueta_12
+
+
+    ; Subir hacia oreja derecha
+
+    ldi r21, 10
+
+gengar_silueta_13:
+
+    rcall diagonal_arriba_izquierda
+
+    dec r21
+    brne gengar_silueta_13
+
+
+    ; Oreja derecha
+
+    ldi r21, 8
+
+gengar_silueta_14:
+
+    rcall diagonal_arriba_izquierda
+
+    dec r21
+    brne gengar_silueta_14
+
+
+    ; Regresar al centro superior
+
+    ldi r21, 10
+
+gengar_silueta_15:
+
+    rcall diagonal_abajo_izquierda
+
+    dec r21
+    brne gengar_silueta_15
+
+
+    rcall lapiz_arriba
+
+    ret
+
+;==================================================
+; OJO IZQUIERDO DE GENGAR
+;==================================================
+
+gengar_ojo_izquierdo:
+
+    ; El lapiz debe llegar levantado
+
+    ; Bajar lapiz para comenzar el ojo
+    rcall lapiz_abajo
+
+
+    ; Parte superior inclinada
+    ; Abajo-derecha
+
+    ldi r21, 8
+
+ojo_izq_1:
+
+    rcall diagonal_abajo_derecha
+
+    dec r21
+    brne ojo_izq_1
+
+
+    ; Parte inferior hacia la izquierda
+
+    ldi r21, 8
+
+ojo_izq_2:
+
+    rcall diagonal_abajo_izquierda
+
+    dec r21
+    brne ojo_izq_2
+
+
+    ; Cerrar el ojo hacia arriba
+
+    ldi r21, 8
+    rcall pasos_arriba
+
+
+    ; Subir lapiz
+
+    rcall lapiz_arriba
+
+    ret
+
+;==================================================
+; OJO DERECHO DE GENGAR
+;==================================================
+
+gengar_ojo_derecho:
+
+    rcall lapiz_abajo
+
+
+    ; Parte superior inclinada
+    ; Abajo-izquierda
+
+    ldi r21, 8
+
+ojo_der_1:
+
+    rcall diagonal_abajo_izquierda
+
+    dec r21
+    brne ojo_der_1
+
+
+    ; Parte inferior hacia la derecha
+
+    ldi r21, 8
+
+ojo_der_2:
+
+    rcall diagonal_abajo_derecha
+
+    dec r21
+    brne ojo_der_2
+
+
+    ; Cerrar ojo
+
+    ldi r21, 8
+    rcall pasos_arriba
+
+
+    rcall lapiz_arriba
+
+    ret
+
+;==================================================
+; BOCA DE GENGAR
+;==================================================
+
+gengar_boca:
+
+    rcall lapiz_abajo
+
+
+    ; Parte superior de la boca
+
+    ldi r21, 24
+    rcall pasos_derecha
+
+
+    ; Esquina derecha hacia abajo
+
+    ldi r21, 5
+
+boca_1:
+
+    rcall diagonal_abajo_izquierda
+
+    dec r21
+    brne boca_1
+
+
+    ; Parte inferior hacia la izquierda
+
+    ldi r21, 14
+    rcall pasos_izquierda
+
+
+    ; Cerrar lado izquierdo
+
+    ldi r21, 5
+
+boca_2:
+
+    rcall diagonal_arriba_izquierda
+
+    dec r21
+    brne boca_2
+
+
+    rcall lapiz_arriba
+
+    ;==============================================
+    ; POSICIONAR EN OJO IZQUIERDO
+    ;==============================================
+
+    ldi r21, 18
+    rcall pasos_izquierda
+
+    ldi r21, 15
+    rcall pasos_abajo
+
+    rcall gengar_ojo_izquierdo
+
+
+    ;==============================================
+    ; POSICIONAR EN OJO DERECHO
+    ;==============================================
+
+    ldi r21, 18
+    rcall pasos_derecha
+
+    rcall gengar_ojo_derecho
+
+
+    ;==============================================
+    ; POSICIONAR EN LA BOCA
+    ;==============================================
+
+    ldi r21, 20
+    rcall pasos_izquierda
+
+    ldi r21, 12
+    rcall pasos_abajo
+
+    rcall gengar_boca
+
+
+    ret
+
+;==================================================
+; OPCION T - DIBUJAR TODAS LAS FIGURAS
+;==================================================
+
+dibujar_todas:
+
+    ;----------------------------------------------
+    ; FIGURA 1 - TRIANGULO
+    ;----------------------------------------------
+
+    rcall dibujar_triangulo
+
+    ; Mover a nueva posicion con lapiz arriba
+
+    ldi r21, 15
+    rcall pasos_derecha
+
+
+    ;----------------------------------------------
+    ; FIGURA 2 - CIRCULO
+    ;----------------------------------------------
+
+    rcall dibujar_circulo
+
+    ; Mover a nueva posicion
+
+    ldi r21, 15
+    rcall pasos_derecha
+
+
+    ;----------------------------------------------
+    ; FIGURA 3 - PENTAGRAMA
+    ;----------------------------------------------
+
+    rcall dibujar_pentagrama
+
+    ; Mover hacia abajo para segunda fila
+
+    ldi r21, 40
+    rcall pasos_izquierda
+
+    ldi r21, 30
+    rcall pasos_abajo
+
+
+    ;----------------------------------------------
+    ; FIGURA 4 - FIGURA LIBRE
+    ;----------------------------------------------
+
+    rcall dibujar_libre
+
+    ; Mover hacia la derecha
+
+    ldi r21, 25
+    rcall pasos_derecha
+
+
+    ;----------------------------------------------
+    ; POKEMON - GENGAR
+    ;----------------------------------------------
+
+    rcall dibujar_gengar
+
+
+    ;----------------------------------------------
+    ; FIN
+    ;----------------------------------------------
+
+    rcall lapiz_arriba
+
+    ret
+
+;==================================================
+; RETARDO PARA PASOS PEQUEÑOS
+;==================================================
+
+delay_paso:
+
+    ldi r18, 2
+
+delay_paso_ext:
+
+    ldi r19, 255
+
+delay_paso_int:
+
+    dec r19
+    brne delay_paso_int
+
+    dec r18
+    brne delay_paso_ext
+
+    ret
+
+
+;==================================================
+; RETARDO PARA MOVIMIENTO
+;==================================================
+
+delay_movimiento:
+
+    ldi r18, 20
+
+delay_mov_ext:
+
+    ldi r19, 255
+
+delay_mov_med:
+
+    ldi r20, 255
+
+delay_mov_int:
+
+    dec r20
+    brne delay_mov_int
+
+    dec r19
+    brne delay_mov_med
+
+    dec r18
+    brne delay_mov_ext
+
+    ret
+
 
 
 ;==================================================
