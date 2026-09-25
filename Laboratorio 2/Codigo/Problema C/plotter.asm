@@ -987,7 +987,6 @@ gengar_silueta_15:
 
     rcall lapiz_arriba
 
-    ret
 
     ;==============================================
     ; POSICIONAR EN OJO IZQUIERDO
@@ -1249,16 +1248,22 @@ delay_paso_ext:
 
     ldi r19, 255
 
+delay_paso_med:
+
+    ldi r20, 255
+
 delay_paso_int:
 
-    dec r19
+    dec r20
     brne delay_paso_int
+
+    dec r19
+    brne delay_paso_med
 
     dec r18
     brne delay_paso_ext
 
     ret
-
 
 ;==================================================
 ; RETARDO PARA MOVIMIENTO
