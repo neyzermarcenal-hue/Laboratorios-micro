@@ -3,10 +3,17 @@
 .org 0x0000
     rjmp main
 
+;Direcciones para matriz 
 
-;========================================
-; PROGRAMA PRINCIPAL
-;========================================
+.equ G_FIN = 0
+.equ G_DER = 1
+.equ G_IZQ = 2
+.equ G_ARR = 3
+.equ G_ABA = 4
+.equ G_AD  = 5 ; arriba-derecha
+.equ G_AI  = 6 ; arriba-izquierda
+.equ G_BD  = 7 ; abajo-derecha
+.equ G_BI  = 8 ; abajo-izquierda
 
 main:
 
@@ -60,11 +67,6 @@ USART_INIT:
     sts UCSR0C, r16
 
     ret
-
-
-;========================================
-; BUCLE PRINCIPAL
-;========================================
 
 loop:
 
@@ -415,7 +417,7 @@ dibujar_triangulo:
 
     ; Primer lado diagonal abajo-izquierda
 
-    ldi r21, 20
+    ldi r21, 60
 
 triangulo_lado1:
 
@@ -427,7 +429,7 @@ triangulo_lado1:
 
     ; Base hacia la derecha
 
-    ldi r21, 40
+    ldi r21, 120
 
 triangulo_base:
 
@@ -441,7 +443,7 @@ triangulo_base:
 
     ; Segundo lado diagonal arriba-izquierda
 
-    ldi r21, 20
+    ldi r21, 60
 
 triangulo_lado2:
 
@@ -463,134 +465,125 @@ triangulo_lado2:
 
 dibujar_circulo:
 
-    ; Bajar lapiz
     rcall lapiz_abajo
 
-
-    ;----------------------------------------------
-    ; Parte superior hacia la izquierda
-    ;----------------------------------------------
-
-    ldi r21, 6
-
+    ; 1 - PARTE SUPERIOR
+    ldi r21, 20
 circulo_1:
-
     sbi PORTD, PD6
     rcall delay_paso
     cbi PORTD, PD6
-
     dec r21
     brne circulo_1
 
-
-    ;----------------------------------------------
-    ; Curva superior izquierda
-    ;----------------------------------------------
-
-    ldi r21, 8
-
+    ; 2 - CURVA SUPERIOR IZQUIERDA SUAVE
+    ldi r21, 10
 circulo_2:
-
+    sbi PORTD, PD6
+    rcall delay_paso
+    cbi PORTD, PD6
     rcall diagonal_abajo_izquierda
-
     dec r21
     brne circulo_2
 
-
-    ;----------------------------------------------
-    ; Lado izquierdo
-    ;----------------------------------------------
-
-    ldi r21, 6
-
+    ; 3 - CURVA IZQUIERDA MAS VERTICAL
+    ldi r21, 10
 circulo_3:
-
+    rcall diagonal_abajo_izquierda
     sbi PORTD, PD4
     rcall delay_paso
     cbi PORTD, PD4
-
     dec r21
     brne circulo_3
 
-
-    ;----------------------------------------------
-    ; Curva inferior izquierda
-    ;----------------------------------------------
-
-    ldi r21, 8
-
+    ; 4 - LADO IZQUIERDO
+    ldi r21, 20
 circulo_4:
-
-    rcall diagonal_abajo_derecha
-
+    sbi PORTD, PD4
+    rcall delay_paso
+    cbi PORTD, PD4
     dec r21
     brne circulo_4
 
-
-    ;----------------------------------------------
-    ; Parte inferior
-    ;----------------------------------------------
-
-    ldi r21, 6
-
+    ; 5 - CURVA INFERIOR IZQUIERDA
+    ldi r21, 10
 circulo_5:
-
-    sbi PORTD, PD7
+    sbi PORTD, PD4
     rcall delay_paso
-    cbi PORTD, PD7
-
+    cbi PORTD, PD4
+    rcall diagonal_abajo_derecha
     dec r21
     brne circulo_5
 
-
-    ;----------------------------------------------
-    ; Curva inferior derecha
-    ;----------------------------------------------
-
-    ldi r21, 8
-
+    ; 6 - ENTRANDO A LA PARTE INFERIOR
+    ldi r21, 10
 circulo_6:
-
-    rcall diagonal_arriba_derecha
-
+    rcall diagonal_abajo_derecha
+    sbi PORTD, PD7
+    rcall delay_paso
+    cbi PORTD, PD7
     dec r21
     brne circulo_6
 
-
-    ;----------------------------------------------
-    ; Lado derecho
-    ;----------------------------------------------
-
-    ldi r21, 6
-
+    ; 7 - PARTE INFERIOR
+    ldi r21, 20
 circulo_7:
-
-    sbi PORTD, PD5
+    sbi PORTD, PD7
     rcall delay_paso
-    cbi PORTD, PD5
-
+    cbi PORTD, PD7
     dec r21
     brne circulo_7
 
-
-    ;----------------------------------------------
-    ; Curva superior derecha
-    ;----------------------------------------------
-
-    ldi r21, 8
-
+    ; 8 - CURVA INFERIOR DERECHA SUAVE
+    ldi r21, 10
 circulo_8:
-
-    rcall diagonal_arriba_izquierda
-
+    sbi PORTD, PD7
+    rcall delay_paso
+    cbi PORTD, PD7
+    rcall diagonal_arriba_derecha
     dec r21
     brne circulo_8
 
+    ; 9 - CURVA DERECHA MAS VERTICAL
+    ldi r21, 10
+circulo_9:
+    rcall diagonal_arriba_derecha
+    sbi PORTD, PD5
+    rcall delay_paso
+    cbi PORTD, PD5
+    dec r21
+    brne circulo_9
 
-    ; Subir lapiz
+    ; 10 - LADO DERECHO
+    ldi r21, 20
+circulo_10:
+    sbi PORTD, PD5
+    rcall delay_paso
+    cbi PORTD, PD5
+    dec r21
+    brne circulo_10
+
+    ; 11 - CURVA SUPERIOR DERECHA
+    ldi r21, 10
+circulo_11:
+    sbi PORTD, PD5
+    rcall delay_paso
+    cbi PORTD, PD5
+    rcall diagonal_arriba_izquierda
+    dec r21
+    brne circulo_11
+
+    ; 12 - CERRAR CURVA SUPERIOR
+    ldi r21, 10
+circulo_12:
+    rcall diagonal_arriba_izquierda
+    sbi PORTD, PD6
+    rcall delay_paso
+    cbi PORTD, PD6
+    dec r21
+    brne circulo_12
 
     rcall lapiz_arriba
-
     ret
 
 ;==================================================
@@ -602,93 +595,144 @@ dibujar_pentagrama:
     ; Bajar lapiz
 
     rcall lapiz_abajo
-
-
-    ;----------------------------------------------
-    ; Linea 1
-    ; Desde arriba hacia abajo-izquierda
-    ;----------------------------------------------
-
-    ldi r21, 20
+    ldi r22, 10
 
 pentagrama_1:
 
-    rcall diagonal_abajo_izquierda
+    ; 1 izquierda + 2 abajo
+    ldi r21, 1
 
-    dec r21
+    rcall pasos_izquierda
+    ldi r21, 2
+    rcall pasos_abajo
+
+   ; 1 izquierda + 2 abajo
+   ldi r21, 1
+
+    rcall pasos_izquierda
+    ldi r21, 2
+    rcall pasos_abajo
+
+    ; 1 izquierda + 3 abajo
+    ldi r21, 1
+    rcall pasos_izquierda
+    ldi r21, 3
+    rcall pasos_abajo
+
+    ; 1 izquierda + 2 abajo
+    ldi r21, 1
+    rcall pasos_izquierda
+    ldi r21, 2
+    rcall pasos_abajo
+
+    dec r22
     brne pentagrama_1
 
-
-    ;----------------------------------------------
-    ; Linea 2
-    ; Hacia la derecha
-    ;----------------------------------------------
-
-    ldi r21, 35
+    ldi r22, 10
 
 pentagrama_2:
 
-    sbi PORTD, PD7
-    rcall delay_paso
-    cbi PORTD, PD7
+    ; Repetimos 5 veces:
+    ; 2 derecha + 1 arriba
 
-    dec r21
+    ldi r21, 2
+    rcall pasos_derecha
+    ldi r21, 1
+    rcall pasos_arriba
+
+    ldi r21, 2
+    rcall pasos_derecha
+    ldi r21, 1
+    rcall pasos_arriba
+
+    ldi r21, 2
+    rcall pasos_derecha
+    ldi r21, 1
+    rcall pasos_arriba
+
+    ldi r21, 2
+    rcall pasos_derecha
+    ldi r21, 1
+    rcall pasos_arriba
+
+    ; Ultimos 2 derecha SIN subir
+    ; para conservar 10 derecha + 4 arriba
+    ldi r21, 2
+    rcall pasos_derecha
+
+    dec r22
     brne pentagrama_2
 
+    ldi r21, 120
+    rcall pasos_izquierda
 
-    ;----------------------------------------------
-    ; Linea 3
-    ; Arriba-izquierda
-    ;----------------------------------------------
-
-    ldi r21, 20
+    ldi r22, 10 
 
 pentagrama_3:
 
-    rcall diagonal_arriba_izquierda
+   ; 2 derecha + 1 abajo
 
-    dec r21
+    ldi r21, 2
+    rcall pasos_derecha
+    ldi r21, 1
+    rcall pasos_abajo
+
+    ldi r21, 2
+    rcall pasos_derecha
+    ldi r21, 1
+    rcall pasos_abajo
+
+    ldi r21, 2
+    rcall pasos_derecha
+    ldi r21, 1
+    rcall pasos_abajo
+
+    ldi r21, 2
+    rcall pasos_derecha
+    ldi r21, 1
+    rcall pasos_abajo
+
+    ; Ultimos 2 derecha
+    ldi r21, 2
+    rcall pasos_derecha
+
+    dec r22
     brne pentagrama_3
 
-
-    ;----------------------------------------------
-    ; Linea 4
-    ; Abajo-izquierda
-    ; Cruza el centro
-    ;----------------------------------------------
-
-    ldi r21, 28
+    ldi r22, 10
 
 pentagrama_4:
 
-    rcall diagonal_abajo_izquierda
+     ; 1 izquierda + 2 arriba
+    ldi r21, 1
+    rcall pasos_izquierda
+    ldi r21, 2
+    rcall pasos_arriba
 
-    dec r21
+    ; 1 izquierda + 2 arriba
+    ldi r21, 1
+    rcall pasos_izquierda
+    ldi r21, 2
+    rcall pasos_arriba
+
+    ; 1 izquierda + 3 arriba
+    ldi r21, 1
+    rcall pasos_izquierda
+    ldi r21, 3
+    rcall pasos_arriba
+
+    ; 1 izquierda + 2 arriba
+    ldi r21, 1
+    rcall pasos_izquierda
+    ldi r21, 2
+    rcall pasos_arriba
+
+    dec r22
     brne pentagrama_4
-
-
-    ;----------------------------------------------
-    ; Linea 5
-    ; Arriba-derecha
-    ; Regresa hacia el inicio
-    ;----------------------------------------------
-
-    ldi r21, 28
-
-pentagrama_5:
-
-    rcall diagonal_arriba_derecha
-
-    dec r21
-    brne pentagrama_5
-
-
-    ; Subir lapiz
 
     rcall lapiz_arriba
 
     ret
-
 
 ;==================================================
 ; FIGURA 4 - FIGURA LIBRE: CORAZON
@@ -704,7 +748,7 @@ dibujar_libre:
     ; Desde el centro superior hacia arriba-izquierda
     ;----------------------------------------------
 
-    ldi r21, 8
+    ldi r21, 16
 
 corazon_1:
 
@@ -718,7 +762,7 @@ corazon_1:
     ; Parte superior izquierda
     ;----------------------------------------------
 
-    ldi r21, 8
+    ldi r21, 16
 
 corazon_2:
 
@@ -732,7 +776,7 @@ corazon_2:
     ; Lado izquierdo hacia la punta inferior
     ;----------------------------------------------
 
-    ldi r21, 16
+    ldi r21, 32
 
 corazon_3:
 
@@ -746,7 +790,7 @@ corazon_3:
     ; Desde la punta inferior hacia lado derecho
     ;----------------------------------------------
 
-    ldi r21, 16
+    ldi r21, 32
 
 corazon_4:
 
@@ -760,7 +804,7 @@ corazon_4:
     ; Parte superior derecha
     ;----------------------------------------------
 
-    ldi r21, 8
+    ldi r21, 16
 
 corazon_5:
 
@@ -774,7 +818,7 @@ corazon_5:
     ; Volver al centro superior
     ;----------------------------------------------
 
-    ldi r21, 8
+    ldi r21, 16
 
 corazon_6:
 
@@ -795,375 +839,262 @@ corazon_6:
 
 dibujar_gengar:
 
-    ;----------------------------------------------
-    ; SILUETA
-    ; Comenzamos en la parte superior central
-    ;----------------------------------------------
-
-    rcall lapiz_abajo
-
-
-    ; Hacia oreja izquierda
-
-    ldi r21, 10
-
-gengar_silueta_1:
-
-    rcall diagonal_arriba_izquierda
-
-    dec r21
-    brne gengar_silueta_1
-
-
-    ; Punta de oreja izquierda hacia afuera
-
-    ldi r21, 8
-
-gengar_silueta_2:
-
-    rcall diagonal_abajo_izquierda
-
-    dec r21
-    brne gengar_silueta_2
-
-
-    ; Lado izquierdo de la cabeza
-
-    ldi r21, 10
-
-gengar_silueta_3:
-
-    rcall diagonal_abajo_izquierda
-
-    dec r21
-    brne gengar_silueta_3
-
-
-    ; Lateral izquierdo del cuerpo
-
-    ldi r21, 12
-
-gengar_silueta_4:
-
-    sbi PORTD, PD4
-    rcall delay_paso
-    cbi PORTD, PD4
-
-    dec r21
-    brne gengar_silueta_4
-
-
-    ; Parte inferior izquierda
-
-    ldi r21, 10
-
-gengar_silueta_5:
-
-    rcall diagonal_abajo_derecha
-
-    dec r21
-    brne gengar_silueta_5
-
-
-    ; Primera pata / punta inferior
-
-    ldi r21, 6
-
-gengar_silueta_6:
-
-    rcall diagonal_arriba_derecha
-
-    dec r21
-    brne gengar_silueta_6
-
-
-    ldi r21, 6
-
-gengar_silueta_7:
-
-    rcall diagonal_abajo_derecha
-
-    dec r21
-    brne gengar_silueta_7
-
-
-    ; Centro inferior
-
-    ldi r21, 12
-
-gengar_silueta_8:
-
-    sbi PORTD, PD7
-    rcall delay_paso
-    cbi PORTD, PD7
-
-    dec r21
-    brne gengar_silueta_8
-
-
-    ; Segunda punta inferior
-
-    ldi r21, 6
-
-gengar_silueta_9:
-
-    rcall diagonal_arriba_derecha
-
-    dec r21
-    brne gengar_silueta_9
-
-
-    ldi r21, 6
-
-gengar_silueta_10:
-
-    rcall diagonal_abajo_derecha
-
-    dec r21
-    brne gengar_silueta_10
-
-
-    ; Parte inferior derecha
-
-    ldi r21, 10
-
-gengar_silueta_11:
-
-    rcall diagonal_arriba_derecha
-
-    dec r21
-    brne gengar_silueta_11
-
-
-    ; Lateral derecho
-
-    ldi r21, 12
-
-gengar_silueta_12:
-
-    sbi PORTD, PD5
-    rcall delay_paso
-    cbi PORTD, PD5
-
-    dec r21
-    brne gengar_silueta_12
-
-
-    ; Subir hacia oreja derecha
-
-    ldi r21, 10
-
-gengar_silueta_13:
-
-    rcall diagonal_arriba_izquierda
-
-    dec r21
-    brne gengar_silueta_13
-
-
-    ; Oreja derecha
-
-    ldi r21, 8
-
-gengar_silueta_14:
-
-    rcall diagonal_arriba_izquierda
-
-    dec r21
-    brne gengar_silueta_14
-
-
-    ; Regresar al centro superior
-
-    ldi r21, 10
-
-gengar_silueta_15:
-
-    rcall diagonal_abajo_izquierda
-
-    dec r21
-    brne gengar_silueta_15
-
-
-    rcall lapiz_arriba
-
-
-    ;==============================================
-    ; POSICIONAR EN OJO IZQUIERDO
-    ;==============================================
-
-    ldi r21, 18
-    rcall pasos_izquierda
-
-    ldi r21, 15
-    rcall pasos_abajo
-
-    rcall gengar_ojo_izquierdo
-
-
-    ;==============================================
-    ; POSICIONAR EN OJO DERECHO
-    ;==============================================
-
-    ldi r21, 18
+    ; Posicion inicial: llevar el dibujo mas hacia el centro.
+    ; En este montaje pasos_derecha mueve FISICAMENTE a la izquierda.
+    ; 260 pasos no entran en un registro de 8 bits.
+    ; Se divide en 130 + 130 = 260.
+    ldi r21, 130
     rcall pasos_derecha
 
-    rcall gengar_ojo_derecho
+    ldi r21, 130
+    rcall pasos_derecha
 
-
-    ;==============================================
-    ; POSICIONAR EN LA BOCA
-    ;==============================================
-
-    ldi r21, 20
-    rcall pasos_izquierda
-
-    ldi r21, 12
+    ldi r21, 180
     rcall pasos_abajo
 
-    rcall gengar_boca
+    ; Dibujar silueta exterior
+    ldi ZH, HIGH(GENGAR_MATRIZ<<1)
+    ldi ZL, LOW(GENGAR_MATRIZ<<1)
+    rcall lapiz_abajo
+
+gengar_leer_matriz:
+    lpm r20, Z+
+    cpi r20, G_FIN
+    breq gengar_fin_silueta
+    lpm r21, Z+
+    rcall gengar_ejecutar_movimiento
+    rjmp gengar_leer_matriz
+
+gengar_fin_silueta:
+    rcall lapiz_arriba
+
+;Ojo Izquierdo
+  ldi r21, 44
+  rcall pasos_derecha ; izquierda fisica
+  ldi r21, 64
+  rcall pasos_abajo
+  rcall gengar_ojo_izquierdo
+
+;Ojo derecho
+   ldi r21, 64
+   rcall pasos_izquierda ; derecha fisica
+   rcall gengar_ojo_derecho
+
+;Boca
+   ldi r21, 64
+   rcall pasos_derecha      ; izquierda fisica
+   ldi r21, 40
+   rcall pasos_abajo
+   rcall gengar_boca_pixel
 
     ret
 
-;==================================================
-; OJO IZQUIERDO DE GENGAR
-;==================================================
+; INTERPRETAR MATRIZ
+; r20 = direccion logica del dibujo
+; r21 = cantidad de pasos
+; El eje X fisico esta invertido en este montaje.
+
+gengar_ejecutar_movimiento:
+    cpi r20, G_DER
+    brne gengar_check_izq
+    rjmp gengar_mov_der
+gengar_check_izq:
+    cpi r20, G_IZQ
+    brne gengar_check_arr
+    rjmp gengar_mov_izq
+gengar_check_arr:
+    cpi r20, G_ARR
+    brne gengar_check_aba
+    rjmp gengar_mov_arr
+gengar_check_aba:
+    cpi r20, G_ABA
+    brne gengar_check_ad
+    rjmp gengar_mov_aba
+gengar_check_ad:
+    cpi r20, G_AD
+    brne gengar_check_ai
+    rjmp gengar_mov_ad
+gengar_check_ai:
+    cpi r20, G_AI
+    brne gengar_check_bd
+    rjmp gengar_mov_ai
+gengar_check_bd:
+    cpi r20, G_BD
+    brne gengar_check_bi
+    rjmp gengar_mov_bd
+gengar_check_bi:
+    cpi r20, G_BI
+    brne gengar_mov_fin
+    rjmp gengar_mov_bi
+
+gengar_mov_fin:
+    ret
+
+gengar_mov_der:
+    rcall pasos_izquierda
+    ret
+gengar_mov_izq:
+    rcall pasos_derecha
+    ret
+gengar_mov_arr:
+    rcall pasos_arriba
+    ret
+gengar_mov_aba:
+    rcall pasos_abajo
+    ret
+
+gengar_mov_ad:
+gengar_mov_ad_loop:
+    rcall diagonal_arriba_izquierda
+    dec r21
+    brne gengar_mov_ad_loop
+    ret
+
+gengar_mov_ai:
+gengar_mov_ai_loop:
+    rcall diagonal_arriba_derecha
+    dec r21
+    brne gengar_mov_ai_loop
+    ret
+
+gengar_mov_bd:
+gengar_mov_bd_loop:
+    rcall diagonal_abajo_izquierda
+    dec r21
+    brne gengar_mov_bd_loop
+    ret
+
+gengar_mov_bi:
+gengar_mov_bi_loop:
+    rcall diagonal_abajo_derecha
+    dec r21
+    brne gengar_mov_bi_loop
+    ret
+
+;Ojo Izquierdo 
 
 gengar_ojo_izquierdo:
-
-    ; El lapiz debe llegar levantado
-
-    ; Bajar lapiz para comenzar el ojo
     rcall lapiz_abajo
 
-
-    ; Parte superior inclinada
-    ; Abajo-derecha
+    ldi r21, 12
+    rcall pasos_abajo
 
     ldi r21, 8
-
-ojo_izq_1:
-
-    rcall diagonal_abajo_derecha
-
+gengar_oi_bd:
+    rcall diagonal_abajo_izquierda ; abajo-derecha fisica
     dec r21
-    brne ojo_izq_1
-
-
-    ; Parte inferior hacia la izquierda
+    brne gengar_oi_bd
 
     ldi r21, 8
+    rcall pasos_izquierda ; derecha fisica
 
-ojo_izq_2:
-
-    rcall diagonal_abajo_izquierda
-
+    ldi r21, 4
+gengar_oi_ad1:
+    rcall diagonal_arriba_izquierda ; arriba-derecha fisica
     dec r21
-    brne ojo_izq_2
+    brne gengar_oi_ad1
 
+    ldi r21, 16
+gengar_oi_ai:
+    rcall diagonal_arriba_derecha  ; arriba-izquierda fisica
+    dec r21
+    brne gengar_oi_ai
 
-    ; Cerrar el ojo hacia arriba
-
-    ldi r21, 8
-    rcall pasos_arriba
-
-
-    ; Subir lapiz
+    ldi r21, 4
+    rcall pasos_derecha ; izquierda fisica
 
     rcall lapiz_arriba
-
     ret
 
-;==================================================
-; OJO DERECHO DE GENGAR
-;==================================================
+;Ojo derecho
 
 gengar_ojo_derecho:
-
     rcall lapiz_abajo
 
-
-    ; Parte superior inclinada
-    ; Abajo-izquierda
-
-    ldi r21, 8
-
-ojo_der_1:
-
-    rcall diagonal_abajo_izquierda
-
+    ldi r21, 16
+gengar_od_bi:
+    rcall diagonal_abajo_derecha ; abajo-izquierda fisica
     dec r21
-    brne ojo_der_1
+    brne gengar_od_bi
 
-
-    ; Parte inferior hacia la derecha
-
-    ldi r21, 8
-
-ojo_der_2:
-
-    rcall diagonal_abajo_derecha
-
+    ldi r21, 4
+gengar_od_bd:
+    rcall diagonal_abajo_izquierda ; abajo-derecha fisica
     dec r21
-    brne ojo_der_2
-
-
-    ; Cerrar ojo
+    brne gengar_od_bd
 
     ldi r21, 8
+    rcall pasos_izquierda ; derecha fisica
+
+    ldi r21, 8
+gengar_od_ad:
+    rcall diagonal_arriba_izquierda ; arriba-derecha fisica
+    dec r21
+    brne gengar_od_ad
+
+    ldi r21, 12
     rcall pasos_arriba
 
+    ldi r21, 4
+    rcall pasos_derecha; izquierda fisica
 
     rcall lapiz_arriba
-
     ret
 
-;==================================================
-; BOCA DE GENGAR
-;==================================================
+;Boca + Dientes
 
-gengar_boca:
-
+gengar_boca_pixel:
+    ; Borde exterior
     rcall lapiz_abajo
 
+    ldi r21, 80
+    rcall pasos_izquierda ; derecha fisica
 
-    ; Parte superior de la boca
-
-    ldi r21, 24
-    rcall pasos_derecha
-
-
-    ; Esquina derecha hacia abajo
-
-    ldi r21, 5
-
-boca_1:
-
-    rcall diagonal_abajo_izquierda
-
+    ldi r21, 20
+gengar_boca_bi:
+    rcall diagonal_abajo_derecha ; abajo-izquierda fisica
     dec r21
-    brne boca_1
+    brne gengar_boca_bi
 
+    ldi r21, 40
+    rcall pasos_derecha ; izquierda fisica
 
-    ; Parte inferior hacia la izquierda
-
-    ldi r21, 14
-    rcall pasos_izquierda
-
-
-    ; Cerrar lado izquierdo
-
-    ldi r21, 5
-
-boca_2:
-
-    rcall diagonal_arriba_izquierda
-
+    ldi r21, 20
+gengar_boca_ai:
+    rcall diagonal_arriba_derecha ; arriba-izquierda fisica
     dec r21
-    brne boca_2
-
+    brne gengar_boca_ai
 
     rcall lapiz_arriba
+
+    ; Diente 1:
+    ldi r21, 20
+    rcall pasos_izquierda
+    rcall lapiz_abajo
+    ldi r21, 16
+    rcall pasos_abajo
+    rcall lapiz_arriba
+    ldi r21, 16
+    rcall pasos_arriba
+
+    ; Diente 2
+    ldi r21, 20
+    rcall pasos_izquierda
+    rcall lapiz_abajo
+    ldi r21, 20
+    rcall pasos_abajo
+    rcall lapiz_arriba
+    ldi r21, 20
+    rcall pasos_arriba
+
+    ; Diente 3
+    ldi r21, 20
+    rcall pasos_izquierda
+    rcall lapiz_abajo
+    ldi r21, 16
+    rcall pasos_abajo
+    rcall lapiz_arriba
+
     ret
 
 ;==================================================
@@ -1296,8 +1227,6 @@ delay_mov_int:
 
     ret
 
-
-
 ;==================================================
 ; RETARDO DEL RELE / SOLENOIDE
 ;==================================================
@@ -1334,3 +1263,118 @@ delay_rele_int:
 MENU:
 
  .db 13,10,"PLOTTER UTEC",13,10,"1 - Triangulo",13,10,"2 - Circulo",13,10,"3 - Pentagrama",13,10,"4 - Figura libre",13,10,"P - Gengar",13,10,"T - Todas",13,10,"Seleccione: ",0
+
+GENGAR_MATRIZ: 
+
+   ; Contorno exterior extraido pixel por pixel de la referencia.
+  ; 1 celda de la grilla = 4 pasos.
+    .db G_BI, 12
+    .db G_ABA, 4
+    .db G_BI, 12
+    .db G_IZQ, 4
+    .db G_AI, 8
+    .db G_IZQ, 4
+    .db G_BD, 4
+    .db G_ABA, 4
+    .db G_BI, 8
+    .db G_AI, 4
+    .db G_IZQ, 8
+    .db G_AI, 4
+    .db G_IZQ, 4
+    .db G_AI, 4
+    .db G_IZQ, 4
+    .db G_AI, 4
+    .db G_IZQ, 8
+    .db G_BD, 4
+    .db G_ABA, 4
+    .db G_BD, 8
+    .db G_ABA, 4
+    .db G_BD, 4
+    .db G_ABA, 4
+    .db G_BD, 8
+    .db G_ABA, 8
+    .db G_BI, 12
+    .db G_IZQ, 4
+    .db G_BI, 8
+    .db G_ABA, 4
+    .db G_BI, 4
+    .db G_ABA, 4
+    .db G_BI, 4
+    .db G_ABA, 28
+    .db G_BD, 4
+    .db G_DER, 8
+    .db G_AD, 4
+    .db G_ARR, 4
+    .db G_AD, 4
+    .db G_ARR, 8
+    .db G_AD, 4
+    .db G_BD, 4
+    .db G_ABA, 8
+    .db G_BD, 4
+    .db G_ABA, 36
+    .db G_BD, 4
+    .db G_ABA, 4
+    .db G_DER, 12
+    .db G_AD, 8
+    .db G_ARR, 4
+    .db G_AD, 4
+    .db G_DER, 8
+    .db G_BD, 4
+    .db G_DER, 20
+    .db G_AD, 4
+    .db G_DER, 8
+    .db G_BD, 4
+    .db G_ABA, 4
+    .db G_BD, 8
+    .db G_DER, 12
+    .db G_ARR, 4
+    .db G_AD, 4
+    .db G_ARR, 36
+    .db G_AD, 4
+    .db G_ARR, 8
+    .db G_AD, 4
+    .db G_BD, 4
+    .db G_ABA, 8
+    .db G_BD, 4
+    .db G_ABA, 4
+    .db G_BD, 4
+    .db G_DER, 8
+    .db G_AD, 4
+    .db G_ARR, 28
+    .db G_AI, 4
+    .db G_ARR, 4
+    .db G_AI, 4
+    .db G_ARR, 4
+    .db G_AI, 8
+    .db G_IZQ, 4
+    .db G_AI, 12
+    .db G_ARR, 8
+    .db G_AD, 8
+    .db G_ARR, 4
+    .db G_AD, 4
+    .db G_ARR, 4
+    .db G_AD, 8
+    .db G_ARR, 4
+    .db G_AD, 4
+    .db G_IZQ, 8
+    .db G_BI, 4
+    .db G_IZQ, 4
+    .db G_BI, 4
+    .db G_IZQ, 4
+    .db G_BI, 4
+    .db G_IZQ, 8
+    .db G_BI, 4
+    .db G_AI, 8
+    .db G_ARR, 4
+    .db G_AD, 4
+    .db G_IZQ, 4
+    .db G_BI, 8
+    .db G_IZQ, 4
+    .db G_AI, 4
+    .db G_ARR, 8
+    .db G_AD, 4
+    .db G_ARR, 12
+    .db G_IZQ, 4
+
+    .db G_FIN, 0
+
