@@ -74,26 +74,31 @@ const uint16_t DURACIONES_3[] = {
 };
 	
 void timer1_init(void){
-	//PB1 como salida 
-	DDRB |= (1 << PB1);
+	//PB1 y PB2 como salida 
+	DDRB |= (1 << PB1) | (1 << PB2); 
 	//Configurar modo CTC
 	TCCR1A = 0;
 	TCCR1B = (1<<WGM12);
 }
 
-void reproducir_nota(uint16_t ocr_valor){
+void reproducir_nota_piano(uint16_t ocr_valor) {
 	OCR1A = ocr_valor;
-	
-	TCCR1A |= (1<<COM1A0);
-	TCCR1B |= (1<<CS11) | (1<<CS10); 
+	TCCR1A &= ~(1 << COM1B0);              // Desconecta el Buzzer 2
+	TCCR1A |= (1 << COM1A0);               // Activa el Buzzer 1 
+	TCCR1B |= (1 << CS11) | (1 << CS10);
 }
 
-void apagar(void){
-	//Desconectar el pin PB1
-	TCCR1A &= ~(1<<COM1A0);
-	
-	//Apagar el reloj del Timer1
-	TCCR1B &= ~((1<< CS12) | (1<<CS11) | (1<<CS10)); 
+void reproducir_nota_cancion(uint16_t ocr_valor) {
+	OCR1A = ocr_valor;
+	OCR1B = ocr_valor;
+	TCCR1A &= ~(1 << COM1A0);              // Desconecta el Buzzer 1
+	TCCR1A |= (1 << COM1B0);               // Activa el Buzzer 2 
+	TCCR1B |= (1 << CS11) | (1 << CS10);
+}
+
+void silenciar(void) {
+	TCCR1A &= ~((1 << COM1A0) | (1 << COM1B0));            // Desconecta ambos buzzers
+	TCCR1B &= ~((1 << CS12) | (1 << CS11) | (1 << CS10));  // Detiene el Timer
 }
 
 //Lectura de botones (Piano Manual)
@@ -159,7 +164,7 @@ void reproducir_cancion(const uint16_t* melodia, const uint16_t* duraciones, uin
 		uint16_t nota = melodia[i];
 		uint16_t duracion = duraciones[i];
 		
-		reproducir_nota(nota);
+		reproducir_nota_cancion(nota);
 		
 		//Toca la nota durante el 85% del tiempo
 		if(esperar_cancelacion(duracion * 85 / 100)){
@@ -180,9 +185,7 @@ int main(void)
 	timer1_init();
 	botones_init();
 	usart_init();
-	
-	
-	
+		
 	int8_t nota_actual= -1;
  
     while (1) 
@@ -208,7 +211,7 @@ int main(void)
 		nota_actual = obtener_nota_pulsada();
 		
 		if(nota_actual !=-1){
-			reproducir_nota(NOTAS[nota_actual]);
+			reproducir_nota_piano(NOTAS[nota_actual]);
     }else{
 		apagar();
 	}
