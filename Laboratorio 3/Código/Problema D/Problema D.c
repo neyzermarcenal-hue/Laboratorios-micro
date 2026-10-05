@@ -17,7 +17,7 @@ SI = 494 Hz
 DO agudo = 523 Hz   
 */
 
-#define F_CPU 160000000UL // Frecuencia de 16MHz
+#define F_CPU 16000000UL // Frecuencia de 16MHz
 #include <avr/io.h>
 #include <util/delay.h>
 
