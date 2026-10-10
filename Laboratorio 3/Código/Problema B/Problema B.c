@@ -7,9 +7,10 @@
 #include <stdio.h>
 
 // Configuracion general del sistema
-#define MOTOR_HABILITADO 0
-#define POT_MIN 150
-#define POT_MAX 850
+#define MOTOR_HABILITADO 1
+#define AUTO_HABILITADO 0
+#define POT_MIN 200
+#define POT_MAX 820
 #define TOLERANCIA 25
 
 // Relacion entre el sentido del motor y el mecanismo
@@ -21,10 +22,13 @@
 #define PWM_TOP 1999
 #define MAX_GIRO_MS 1500
 #define SIN_MOVIMIENTO_MS 350
+#define PRUEBA_MS 80
+#define PWM_PRUEBA 85
 
 volatile uint16_t tiempo_ms = 0;
 volatile uint16_t setpoint_rx = 0;
 volatile uint8_t nuevo_setpoint = 0;
+volatile char comando_rx = 0;
 
 // Comunicacion UART
 // Basado en la clase USART-LUT y el ejemplo UART de Yisus
@@ -103,6 +107,11 @@ ISR(USART_RX_vect)
 		numero = 0;
 		hay_numero = 0;
 		invalido = 0;
+	}
+	else if (!hay_numero && (dato == 'D' || dato == 'I'))
+	{
+		// Comandos para comprobar los dos sentidos del motor.
+		comando_rx = dato;
 	}
 	else
 	{
@@ -236,19 +245,24 @@ int main(void)
 	uint16_t inicio_giro = 0;
 	uint16_t ultimo_movimiento = 0;
 	uint16_t pot_anterior = 0;
+	uint16_t inicio_prueba = 0;
+	uint16_t pot_inicio_prueba = 0;
 
 	uint8_t setpoint_valido = 0;
 	uint8_t pwm = 0;
 	uint8_t bloqueo = 0;
+	uint8_t prueba_activa = 0;
 
 	int8_t sentido = 0;
 	int8_t sentido_anterior = 0;
+	int8_t sentido_prueba = 0;
 	int16_t error = 0;
 
 	uint16_t diferencia;
 	uint16_t cambio_pot;
 
 	char mensaje[100];
+	char comando = 0;
 	const char *nombre_sentido;
 
 	// Inicializa todos los perifericos.
@@ -279,6 +293,12 @@ int main(void)
 			nuevo_setpoint = 0;
 		}
 
+		if (comando_rx != 0)
+		{
+			comando = comando_rx;
+			comando_rx = 0;
+		}
+
 		SREG = estado;
 
 		// Actualiza las lecturas y el control cada 20 ms.
@@ -297,8 +317,50 @@ int main(void)
 			sentido = 0;
 			pwm = 0;
 
+			// Activa un movimiento corto con D o I.
+			if ((comando == 'D' || comando == 'I') && !prueba_activa)
+			{
+				inicio_prueba = ahora;
+				pot_inicio_prueba = pot;
+				sentido_prueba = (comando == 'D') ? 1 : -1;
+				prueba_activa = 1;
+			}
+			comando = 0;
+
+			if (prueba_activa)
+			{
+				if ((uint16_t)(ahora - inicio_prueba) >= PRUEBA_MS)
+				{
+					prueba_activa = 0;
+					MOTOR_control(0, 0);
+
+					snprintf(mensaje, sizeof(mensaje),
+					"PRUEBA=%c;POT_INI=%u;POT_FIN=%u;CAMBIO=%d\r\n",
+					(sentido_prueba == 1) ? 'D' : 'I',
+					pot_inicio_prueba, pot, (int)pot - (int)pot_inicio_prueba);
+
+					UART_sendString(mensaje);
+				}
+				else
+				{
+					sentido = sentido_prueba;
+					pwm = PWM_PRUEBA;
+				}
+			}
+
+			// Comprueba los limites durante la prueba.
+			if (prueba_activa && sentido != 0 && MOTOR_limite(sentido, pot))
+			{
+				prueba_activa = 0;
+				sentido = 0;
+				pwm = 0;
+				MOTOR_control(0, 0);
+
+				UART_sendString("Movimiento detenido por limite\r\n");
+			}
+
 			// Control automatico cuando existe un setpoint valido.
-			if (MOTOR_HABILITADO && setpoint_valido && !bloqueo)
+			if (MOTOR_HABILITADO && AUTO_HABILITADO && setpoint_valido && !bloqueo && !prueba_activa)
 			{
 				// Si falta iluminacion, abre el mecanismo.
 				if (error > TOLERANCIA)
@@ -381,12 +443,10 @@ int main(void)
 			nombre_sentido = "PARADO";
 
 			if (sentido == 1)
-			nombre_sentido = IN1_ES_HORARIO ?
-			"HORARIO" : "ANTIHORARIO";
+			nombre_sentido = "IN1";
 
 			else if (sentido == -1)
-			nombre_sentido = IN1_ES_HORARIO ?
-			"ANTIHORARIO" : "HORARIO";
+			nombre_sentido = "IN2";
 
 			snprintf(mensaje, sizeof(mensaje),
 			"SP=%u;LDR=%u;POT=%u;ERROR=%d;PWM=%u;DIR=%s\r\n",
