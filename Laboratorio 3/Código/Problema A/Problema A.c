@@ -154,8 +154,29 @@ uint16_t adc_read(uint8_t channel) {
 
 // Lectura analógica simple
 float read_temperature_lm35(void) {
-	uint16_t raw = adc_read(0);
-	float voltage = (raw * 1.1f) / 1024.0f;
+	uint16_t samples[16];
+	for (uint8_t i = 0; i < 16; i++) {
+		samples[i] = adc_read(0);
+		_delay_us(200);
+	}
+	
+	// Ordenamiento por burbuja
+	for (uint8_t i = 0; i < 15; i++) {
+		for (uint8_t j = 0; j < 15 - i; j++) {
+			if (samples[j] > samples[j + 1]) {
+				uint16_t temp = samples[j];
+				samples[j] = samples[j + 1];
+				samples[j + 1] = temp;
+			}
+		}
+	}
+	
+	// Promedio de las 10 muestras centrales
+	uint32_t sum = 0;
+	for (uint8_t i = 3; i < 13; i++) sum += samples[i];
+	
+	float adc_avg = (float)sum / 10.0f;
+	float voltage = (adc_avg * 1.1f) / 1024.0f;
 	return voltage * 100.0f;
 }
 
@@ -183,13 +204,22 @@ ISR(TIMER0_COMPA_vect) {
 
 void update_system_control(float temp) {
 	const char* action_str = "";
+	uint8_t state_changed;
 	
-	if (temp < 18.0f) {
-		current_state = STATE_HEATER_ON;
-		} else if (temp >= 18.0f && temp <= 24.0f) {
-		current_state = STATE_IDEAL;
-		} else {
-		current_state = STATE_FAN_ON;
+	do {
+		state_changed = 0;
+		switch (current_state) {
+			case STATE_HEATER_ON:
+			if (temp >= 18.0f) { current_state = STATE_IDEAL; state_changed = 1; }
+			break;
+			case STATE_IDEAL:
+			if (temp < 18.0f) { current_state = STATE_HEATER_ON; state_changed = 1; }
+			else if (temp >= 24.0f) { current_state = STATE_FAN_ON; state_changed = 1; }
+			break;
+			case STATE_FAN_ON:
+			if (temp < 24.0f) { current_state = STATE_IDEAL; state_changed = 1; }
+			break;
+		}
 	}
 
 	switch (current_state) {
