@@ -1,0 +1,117 @@
+
+#define F_CPU 16000000UL
+
+#include <avr/io.h>
+#include <util/delay.h>
+#include <stdint.h>
+#include <stdio.h>
+
+// Pines del LED RGB
+#define LED_ROJO  PB0   // Arduino D8
+#define LED_VERDE PB2   // Arduino D10
+#define LED_AZUL  PB3   // Arduino D11
+
+// Configuracion del ADC
+void configurar_ADC(void)
+{
+    // Referencia AVcc (5 V) y canal ADC0 (A0)
+    ADMUX = (1 << REFS0);
+
+    // Habilitar ADC y prescaler de 128
+    ADCSRA = (1 << ADEN) |
+             (1 << ADPS2) |
+             (1 << ADPS1) |
+             (1 << ADPS0);
+}
+
+// Leer la fotocelda
+uint16_t leer_ADC(void)
+{
+    // Iniciar conversion
+    ADCSRA |= (1 << ADSC);
+
+    // Esperar a que termine
+    while (ADCSRA & (1 << ADSC));
+
+    // Devolver valor entre 0 y 1023
+    return ADC;
+}
+
+// Configuracion de UART a 9600 baudios
+void configurar_UART(void)
+{
+    UBRR0H = 0;
+    UBRR0L = 103;
+
+    // Habilitar transmision
+    UCSR0B = (1 << TXEN0);
+
+    // 8 bits de datos, 1 bit de parada
+    UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
+}
+
+// Enviar texto por UART
+void enviar_texto(const char *texto)
+{
+    while (*texto)
+    {
+        while (!(UCSR0A & (1 << UDRE0)));
+
+        UDR0 = *texto++;
+    }
+}
+
+int main(void)
+{
+    uint16_t rojo, verde, azul;
+    char mensaje[64];
+
+    // Configurar LED RGB como salida
+    DDRB |= (1 << LED_ROJO) |
+            (1 << LED_VERDE) |
+            (1 << LED_AZUL);
+
+    // Apagar todos los LED
+    PORTB &= ~((1 << LED_ROJO) |
+               (1 << LED_VERDE) |
+               (1 << LED_AZUL));
+
+    configurar_ADC();
+    configurar_UART();
+
+    while (1)
+    {
+        // Encender rojo y medir
+        PORTB |= (1 << LED_ROJO);
+        _delay_ms(300);
+
+        rojo = leer_ADC();
+
+        PORTB &= ~(1 << LED_ROJO);
+
+        // Encender verde y medir
+        PORTB |= (1 << LED_VERDE);
+        _delay_ms(300);
+
+        verde = leer_ADC();
+
+        PORTB &= ~(1 << LED_VERDE);
+
+        // Encender azul y medir
+        PORTB |= (1 << LED_AZUL);
+        _delay_ms(300);
+
+        azul = leer_ADC();
+
+        PORTB &= ~(1 << LED_AZUL);
+
+        // Mostrar mediciones por UART
+        snprintf(mensaje, sizeof(mensaje),
+                 "Rojo: %u | Verde: %u | Azul: %u\r\n",
+                 rojo, verde, azul);
+
+        enviar_texto(mensaje);
+
+        _delay_ms(1500);
+    }
+}
