@@ -1,0 +1,222 @@
+
+#define F_CPU 16000000UL
+
+#include <avr/io.h>
+#include <util/delay.h>
+#include <stdint.h>
+#include <stdio.h>
+
+// Pines del LED RGB
+#define LED_ROJO  PB0   // Arduino D8
+#define LED_VERDE PB2   // Arduino D10
+#define LED_AZUL  PB3   // Arduino D11
+
+// Configuracion del ADC
+void configurar_ADC(void)
+{
+    // Referencia AVcc (5 V) y canal ADC0 (A0)
+    ADMUX = (1 << REFS0);
+
+    // Habilitar ADC y prescaler de 128
+    ADCSRA = (1 << ADEN) |
+             (1 << ADPS2) |
+             (1 << ADPS1) |
+             (1 << ADPS0);
+}
+
+// Leer la fotocelda
+uint16_t leer_ADC(void)
+{
+    // Iniciar conversion
+    ADCSRA |= (1 << ADSC);
+
+    // Esperar a que termine
+    while (ADCSRA & (1 << ADSC));
+
+    // Devolver valor entre 0 y 1023
+    return ADC;
+}
+
+// Configuracion de UART a 9600 baudios
+void configurar_UART(void)
+{
+    UBRR0H = 0;
+    UBRR0L = 103;
+
+    // Habilitar transmision y recepcion
+    UCSR0B = (1 << TXEN0) | (1 << RXEN0);
+
+    // 8 bits de datos, 1 bit de parada
+    UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
+}
+
+// Enviar texto por UART
+void enviar_texto(const char *texto)
+{
+    while (*texto)
+    {
+        while (!(UCSR0A & (1 << UDRE0)));
+
+        UDR0 = *texto++;
+    }
+}
+
+// Configurar servomotor con Timer1
+void configurar_servo(void)
+{
+    // D9 (PB1) como salida
+    DDRB |= (1 << PB1);
+
+    // Timer1 en Fast PWM, salida OC1A
+    TCCR1A = (1 << COM1A1) | (1 << WGM11);
+
+    TCCR1B = (1 << WGM13) |
+             (1 << WGM12) |
+             (1 << CS11);
+
+    // Periodo de 20 ms (50 Hz)
+    ICR1 = 39999;
+
+    // Posicion central aproximada
+    OCR1A = 3000;
+}
+
+// Mover servo a un angulo
+void mover_servo(uint8_t angulo)
+{
+    if (angulo > 180)
+        angulo = 180;
+
+    // Pulsos de 0,9 ms a 2,1 ms
+    OCR1A = 1800 + ((uint32_t)angulo * 2400UL / 180UL);
+}
+
+// Revisar comandos recibidos por UART
+void revisar_UART(void)
+{
+    char opcion;
+
+    // Comprobar si llego un caracter
+    if (!(UCSR0A & (1 << RXC0)))
+        return;
+
+    opcion = UDR0;
+
+    switch (opcion)
+    {
+        case '1':
+            mover_servo(20);
+            enviar_texto("Servo: posicion 1\r\n");
+            break;
+
+        case '2':
+            mover_servo(60);
+            enviar_texto("Servo: posicion 2\r\n");
+            break;
+
+        case '3':
+            mover_servo(110);
+            enviar_texto("Servo: posicion 3\r\n");
+            break;
+
+        case '4':
+            mover_servo(160);
+            enviar_texto("Servo: posicion 4\r\n");
+            break;
+
+        case '0':
+            mover_servo(90);
+            enviar_texto("Servo: centro 90 grados\r\n");
+            break;
+
+        case '\r':
+        case '\n':
+            break;
+
+        default:
+            enviar_texto("Opcion no valida\r\n");
+            break;
+    }
+}
+
+// Esperar revisando UART para no perder comandos
+void esperar_con_UART(uint16_t tiempo_ms)
+{
+    while (tiempo_ms > 0)
+    {
+        revisar_UART();
+        _delay_ms(1);
+        tiempo_ms--;
+    }
+}
+
+int main(void)
+{
+    uint16_t rojo, verde, azul;
+    char mensaje[64];
+
+    // Configurar LED RGB como salida
+    DDRB |= (1 << LED_ROJO) |
+            (1 << LED_VERDE) |
+            (1 << LED_AZUL);
+
+    // Apagar los tres colores
+    PORTB &= ~((1 << LED_ROJO) |
+               (1 << LED_VERDE) |
+               (1 << LED_AZUL));
+
+    // Inicializar componentes
+    configurar_ADC();
+    configurar_UART();
+    configurar_servo();
+
+    // Centrar el servomotor al iniciar
+    mover_servo(90);
+    esperar_con_UART(2000);
+
+    enviar_texto("\r\nCLASIFICADOR DE COLORES\r\n");
+    enviar_texto("Servo centrado en 90 grados\r\n");
+    enviar_texto("1 = 20 grados\r\n");
+    enviar_texto("2 = 60 grados\r\n");
+    enviar_texto("3 = 110 grados\r\n");
+    enviar_texto("4 = 160 grados\r\n");
+    enviar_texto("0 = Centrar servo\r\n");
+
+    while (1)
+    {
+        // LED rojo
+        PORTB |= (1 << LED_ROJO);
+        esperar_con_UART(300);
+
+        rojo = leer_ADC();
+
+        PORTB &= ~(1 << LED_ROJO);
+
+        // LED verde
+        PORTB |= (1 << LED_VERDE);
+        esperar_con_UART(300);
+
+        verde = leer_ADC();
+
+        PORTB &= ~(1 << LED_VERDE);
+
+        // LED azul
+        PORTB |= (1 << LED_AZUL);
+        esperar_con_UART(300);
+
+        azul = leer_ADC();
+
+        PORTB &= ~(1 << LED_AZUL);
+
+        // Mostrar mediciones
+        snprintf(mensaje, sizeof(mensaje),
+                 "Rojo: %u | Verde: %u | Azul: %u\r\n",
+                 rojo, verde, azul);
+
+        enviar_texto(mensaje);
+
+        // Esperar antes de repetir
+        esperar_con_UART(1500);
+    }
+}
+
