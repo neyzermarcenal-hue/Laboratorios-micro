@@ -102,12 +102,12 @@ void lcd_set_cursor(uint8_t row, uint8_t col) {
 	lcd_command(addr);
 }
 
-// Driver USART a bajo nivel
+// Driver USART
 void uart_init(unsigned int baud) {
 	unsigned int ubrr = F_CPU / 16 / baud - 1;
 	UBRR0H = (unsigned char)(ubrr >> 8);
 	UBRR0L = (unsigned char)ubrr;
-	UCSR0B = (1 << RXEN0) | (1 << TXEN0);
+	UCSR0B = (1 << RXEN0) | (1 << TXEN0)  | (1<<RXCIE0) ;
 	UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
 }
 
@@ -120,7 +120,7 @@ void uart_send_string(const char* str) {
 	while (*str) uart_transmit(*str++);
 }
 
-// Conversión float a ASCII sin bibliotecas estándar
+// Conversión float a ASCII
 void send_float_custom(float val, void (*output_func)(char)) {
 	if (val < 0) { output_func('-'); val = -val; }
 	uint16_t entero = (uint16_t)val;
@@ -136,6 +136,21 @@ void send_float_custom(float val, void (*output_func)(char)) {
 	output_func('0' + (entero % 10));
 	output_func('.');
 	output_func('0' + decimal);
+}
+
+float custom_atof(const char* str) {
+	float res = 0.0f;
+	float factor = 1.0f;
+	uint8_t is_decimal = 0;
+	while (*str) {
+		if (*str == '.') is_decimal = 1;
+		else if (*str >= '0' && *str <= '9') {
+			if (!is_decimal) res = res * 10.0f + (*str - '0');
+			else { factor /= 10.0f; res += (*str - '0') * factor; }
+		}
+		str++;
+	}
+	return res;
 }
 
 void uart_send_float(float val) { send_float_custom(val, uart_transmit); }
@@ -202,6 +217,38 @@ ISR(TIMER0_COMPA_vect) {
 		sample_flag = 1;
 		count_5s = 0;
 	}
+}
+
+char rx_buffer[16];
+volatile uint8_t rx_index = 0;
+volatile uint8_t command_ready = 0;
+
+ISR(USART_RX_vect) {
+	char ch = UDR0;
+	if (ch == '\r' || ch == '\n') {
+		if (rx_index > 0) {
+			rx_buffer[rx_index] = '\0';
+			command_ready = 1;
+			rx_index = 0;
+		}
+		} else if (rx_index < sizeof(rx_buffer) - 1) {
+		rx_buffer[rx_index++] = ch;
+	}
+}
+
+void process_uart_menu(void) {
+	if (!command_ready) return;
+	
+	float new_midpoint = custom_atof(rx_buffer);
+	if (new_midpoint <= 5.0f || (new_midpoint + SAFETY_MARGIN) >= MAX_SENSOR_TEMP) {
+		uart_send_string("\r\n[ERROR] Punto medio invalido!\r\n");
+		} else {
+		punto_medio = new_midpoint;
+		uart_send_string("\r\n[OK] Nuevo PM: ");
+		uart_send_float(punto_medio);
+		uart_send_string(" C\r\n");
+	}
+	command_ready = 0;
 }
 
 void update_system_control(float temp) {
@@ -301,9 +348,10 @@ int main(void)
 	timer1_pwm_init();
 	timer0_init();
 	sei();
-    /* Replace with your application code */
+    uart_send_string("\r\n=== SISTEMA CONTROL TEMPERATURA ATmega328P ===\r\n");
     while (1) 
     {
+		process_uart_menu(); // Monitorear menú RX
 		if (sample_flag) {
 			sample_flag = 0;
 			temp_actual = read_temperature_lm35();
