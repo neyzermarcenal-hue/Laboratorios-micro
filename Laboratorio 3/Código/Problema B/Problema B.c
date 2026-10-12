@@ -7,20 +7,18 @@
 #include <stdio.h>
 
 // Configuracion general del sistema
-#define MOTOR_HABILITADO 0
+#define MOTOR_HABILITADO 1
+#define AUTO_HABILITADO 1
 #define POT_MIN 150
-#define POT_MAX 850
+#define POT_MAX 900
 #define TOLERANCIA 25
 
 // Relacion entre el sentido del motor y el mecanismo
 #define IN1_ABRE 1
 #define POT_SUBE_CON_IN1 1
-#define IN1_ES_HORARIO 1
 
-// Configuracion del PWM y tiempos de seguridad
+// Configuracion del PWM
 #define PWM_TOP 1999
-#define MAX_GIRO_MS 1500
-#define SIN_MOVIMIENTO_MS 350
 
 volatile uint16_t tiempo_ms = 0;
 volatile uint16_t setpoint_rx = 0;
@@ -233,20 +231,17 @@ int main(void)
 
 	uint16_t ultimo_control = 0;
 	uint16_t ultimo_envio = 0;
-	uint16_t inicio_giro = 0;
-	uint16_t ultimo_movimiento = 0;
-	uint16_t pot_anterior = 0;
 
 	uint8_t setpoint_valido = 0;
 	uint8_t pwm = 0;
-	uint8_t bloqueo = 0;
+	uint8_t envio_pendiente = 0;
+	uint8_t indice_envio = 0;
 
 	int8_t sentido = 0;
 	int8_t sentido_anterior = 0;
 	int16_t error = 0;
 
 	uint16_t diferencia;
-	uint16_t cambio_pot;
 
 	char mensaje[100];
 	const char *nombre_sentido;
@@ -297,103 +292,83 @@ int main(void)
 			sentido = 0;
 			pwm = 0;
 
-			// Control automatico cuando existe un setpoint valido.
-			if (MOTOR_HABILITADO && setpoint_valido && !bloqueo)
-			{
-				// Si falta iluminacion, abre el mecanismo.
-				if (error > TOLERANCIA)
-				sentido = IN1_ABRE ? 1 : -1;
 
-				// Si sobra iluminacion, cierra el mecanismo.
-				else if (error < -TOLERANCIA)
-				sentido = IN1_ABRE ? -1 : 1;
+// Control automatico cuando existe un setpoint valido.
+if (MOTOR_HABILITADO && AUTO_HABILITADO && setpoint_valido)
+{
+	// Si falta iluminacion, abre el mecanismo.
+	if (error > TOLERANCIA)
+	sentido = IN1_ABRE ? 1 : -1;
 
-				if (sentido != 0)
-				{
-					diferencia = (error < 0) ? -error : error;
+	// Si sobra iluminacion, cierra el mecanismo.
+	else if (error < -TOLERANCIA)
+	sentido = IN1_ABRE ? -1 : 1;
 
-					// Ajusta el PWM segun la diferencia de luz.
-					pwm = 70 + diferencia / 30;
+	if (sentido != 0)
+	{
+		diferencia = (error < 0) ? -error : error;
 
-					if (pwm > 95)
-					pwm = 95;
-				}
+		// Ajusta el PWM segun la diferencia de luz.
+		pwm = 70 + diferencia / 30;
 
-				// Comprueba los limites del potenciometro.
-				if (sentido != 0 && MOTOR_limite(sentido, pot))
-				{
-					sentido = 0;
-					pwm = 0;
-				}
+		if (pwm > 95)
+		pwm = 95;
+	}
 
-				// Introduce una parada antes de invertir el giro.
-				if (sentido != 0 &&
-				sentido_anterior != 0 &&
-				sentido != sentido_anterior)
-				{
-					sentido = 0;
-					pwm = 0;
-				}
+	// Evita superar los limites del potenciometro.
+	if (sentido != 0 && MOTOR_limite(sentido, pot))
+	{
+		sentido = 0;
+		pwm = 0;
+	}
 
-				// Comprueba que el motor no quede girando sin control.
-				if (sentido != 0)
-				{
-					if (sentido != sentido_anterior)
-					{
-						inicio_giro = ahora;
-						ultimo_movimiento = ahora;
-						pot_anterior = pot;
-					}
+	// Hace una pausa breve al invertir el sentido.
+	if (sentido != 0 &&
+	sentido_anterior != 0 &&
+	sentido != sentido_anterior)
+	{
+		sentido = 0;
+		pwm = 0;
+	}
+}
 
-					cambio_pot = (pot > pot_anterior)
-					? pot - pot_anterior
-					: pot_anterior - pot;
-
-					// Actualiza el tiempo si cambia la posicion.
-					if (cambio_pot >= 3)
-					{
-						ultimo_movimiento = ahora;
-						pot_anterior = pot;
-					}
-
-					// Detiene el movimiento si supera el tiempo
-					// o si el potenciometro deja de variar.
-					if ((uint16_t)(ahora - inicio_giro) >= MAX_GIRO_MS ||
-					(uint16_t)(ahora - ultimo_movimiento) >= SIN_MOVIMIENTO_MS)
-					{
-						bloqueo = 1;
-						sentido = 0;
-						pwm = 0;
-					}
-				}
-			}
 
 			// Aplica el sentido y el PWM calculados.
 			MOTOR_control(sentido, pwm);
 			sentido_anterior = sentido;
 		}
 
-		// Envia las variables solicitadas cada 300 ms.
-		if ((uint16_t)(ahora - ultimo_envio) >= 300)
+		
+		// Prepara las variables para enviarlas cada 300 ms.
+		if ((uint16_t)(ahora - ultimo_envio) >= 300 && !envio_pendiente)
 		{
 			ultimo_envio = ahora;
 
 			nombre_sentido = "PARADO";
 
 			if (sentido == 1)
-			nombre_sentido = IN1_ES_HORARIO ?
-			"HORARIO" : "ANTIHORARIO";
+			nombre_sentido = "HORARIO";
 
 			else if (sentido == -1)
-			nombre_sentido = IN1_ES_HORARIO ?
-			"ANTIHORARIO" : "HORARIO";
+			nombre_sentido = "ANTIHORARIO";
 
 			snprintf(mensaje, sizeof(mensaje),
 			"SP=%u;LDR=%u;POT=%u;ERROR=%d;PWM=%u;DIR=%s\r\n",
 			setpoint, ldr, pot, (int)error,
 			pwm, nombre_sentido);
 
-			UART_sendString(mensaje);
+			indice_envio = 0;
+			envio_pendiente = 1;
 		}
+
+		// Envia un caracter cuando UART esta disponible.
+		if (envio_pendiente && (UCSR0A & (1 << UDRE0)))
+		{
+			UDR0 = mensaje[indice_envio++];
+
+			if (mensaje[indice_envio] == '\0')
+			envio_pendiente = 0;
+		}
+
 	}
 }
