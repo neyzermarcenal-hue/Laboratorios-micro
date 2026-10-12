@@ -21,7 +21,9 @@ float temp_actual = 0.0f;
 typedef enum {
 	STATE_HEATER_ON,
 	STATE_IDEAL,
-	STATE_FAN_ON
+	STATE_FAN_LOW,
+	STATE_FAN_MED,
+	STATE_FAN_HIGH
 } SystemState;
 
 SystemState current_state = STATE_IDEAL;
@@ -206,22 +208,40 @@ void update_system_control(float temp) {
 	const char* action_str = "";
 	uint8_t state_changed;
 	
+	float low_limit   = punto_medio - 4.5f; // 15.5 °C
+	float high_limit  = punto_medio + 4.5f; // 24.5 °C
+	float fan_low_th  = high_limit;
+	float fan_med_th  = high_limit + 3.0f;  // 27.5 °C
+	float fan_high_th = high_limit + 6.0f;  // 30.5 °C
+	const float HYST  = 0.2f;
+
+
 	do {
 		state_changed = 0;
 		switch (current_state) {
 			case STATE_HEATER_ON:
-			if (temp >= 18.0f) { current_state = STATE_IDEAL; state_changed = 1; }
+			if (temp >= (low_limit + HYST)) { current_state = STATE_IDEAL; state_changed = 1; }
 			break;
 			case STATE_IDEAL:
-			if (temp < 18.0f) { current_state = STATE_HEATER_ON; state_changed = 1; }
-			else if (temp >= 24.0f) { current_state = STATE_FAN_ON; state_changed = 1; }
+			if (temp <= (low_limit - HYST)) { current_state = STATE_HEATER_ON; state_changed = 1; }
+			else if (temp >= (fan_low_th + HYST)) { current_state = STATE_FAN_LOW; state_changed = 1; }
 			break;
-			case STATE_FAN_ON:
-			if (temp < 24.0f) { current_state = STATE_IDEAL; state_changed = 1; }
+			
+			case STATE_FAN_LOW:
+			if (temp <= (fan_low_th - HYST)) { current_state = STATE_IDEAL; state_changed = 1; }
+			else if (temp >= (fan_med_th + HYST)) { current_state = STATE_FAN_MED; state_changed = 1; }
+			break;
+			case STATE_FAN_MED:
+			if (temp <= (fan_med_th - HYST)) { current_state = STATE_FAN_LOW; state_changed = 1; }
+			else if (temp >= (fan_high_th + HYST)) { current_state = STATE_FAN_HIGH; state_changed = 1; }
+			break;
+			case STATE_FAN_HIGH:
+			if (temp <= (fan_high_th - HYST)) { current_state = STATE_FAN_MED; state_changed = 1; }
 			break;
 		}
-	}
+	} while (state_changed); // 
 
+	// Configuración de salidas físicas
 	switch (current_state) {
 		case STATE_HEATER_ON:
 		TCCR1A &= ~(1 << COM1A1);
@@ -234,14 +254,26 @@ void update_system_control(float temp) {
 		PORTB &= ~((1 << PB0) | (1 << PB1));
 		action_str = "Ideal (Todo OFF)";
 		break;
-		case STATE_FAN_ON:
+		
+		case STATE_FAN_LOW:
 		TCCR1A |= (1 << COM1A1);
 		PORTB &= ~(1 << PB0);
-		OCR1A = 128;
-		action_str = "Ventilador ON";
+		OCR1A = 25; // 10% PWM
+		action_str = "Ventilador BAJO (10%)";
+		break;
+		case STATE_FAN_MED:
+		TCCR1A |= (1 << COM1A1);
+		PORTB &= ~(1 << PB0);
+		OCR1A = 128; // 50% PWM
+		action_str = "Ventilador MEDIO (50%)";
+		break;
+		case STATE_FAN_HIGH:
+		TCCR1A |= (1 << COM1A1);
+		PORTB &= ~(1 << PB0);
+		OCR1A = 255; // 100% PWM
+		action_str = "Ventilador ALTO (100%)";
 		break;
 	}
-
 	uart_send_string("TEMP:"); uart_send_float(temp);
 	uart_send_string("|ACCION:"); uart_send_string(action_str);
 	uart_send_string("|PM:"); uart_send_float(punto_medio);
@@ -251,6 +283,14 @@ void update_system_control(float temp) {
 	lcd_string("Temp: ");
 	lcd_send_float(temp);
 	lcd_string(" C   ");
+	
+// Escribir en la fila 2 del LCD
+	lcd_set_cursor(1, 0);
+	lcd_string("Rango:");
+	lcd_send_float(low_limit);
+	lcd_char('-');
+	lcd_send_float(high_limit);
+	lcd_string("  ");
 }
 
 int main(void)
