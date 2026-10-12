@@ -19,6 +19,7 @@ DO agudo = 523 Hz
 
 #define F_CPU 16000000UL // Frecuencia de 16MHz
 #include <avr/io.h>
+#include <avr/interrupt.h>
 #include <util/delay.h>
 
 #define SILENCIO 255
@@ -29,6 +30,11 @@ DO agudo = 523 Hz
 #define LCD_BACKLIGHT 0x08
 #define LCD_ENABLE    0x04
 #define LCD_RS        0x01
+
+// Variables globales
+volatile uint8_t lcd_presente = 0;
+volatile char comando_uart = 0; // Variable compartida con la ISR
+int8_t nota_anterior = -1;
 
 //Definicion de funciones 
 
@@ -50,8 +56,6 @@ void actualizar_nota_lcd(int8_t nota);
 void timer1_init(void);
 void botones_init(void);
 void usart_init(void);
-uint8_t usart_disponible(void);
-char usart_recibir(void);
 void usart_enviar_texto(const char* str);
 void mostrar_menu_serial(void);
 void reproducir_nota_piano(uint16_t ocr_valor);
@@ -61,8 +65,6 @@ int8_t obtener_nota_pulsada(void);
 
 uint8_t esperar_cancelacion(uint16_t milisegundos);
 uint8_t reproducir_cancion(const uint16_t* notas_base, const uint8_t* melodia, const uint16_t* duraciones, uint8_t total_notas);
-
-int8_t obtener_nota_pulsada(void);
 
 //Tabla de datos de notas
 
@@ -127,17 +129,17 @@ const uint16_t DURACIONES_GRAVITY[32] = {
 	185, 185, 185, 185, 185, 185, 185, 185,
 	185, 185, 185, 185, 185, 185, 185, 370
 };
+
+// --- RUTINA DE SERVICIO DE INTERRUPCIÓN (ISR) ---
+ISR(USART_RX_vect) {
+	char c = UDR0;
+	if (c != '\r' && c != '\n' && c != ' ') {
+		comando_uart = c; // Almacena la orden capturada por interrupción
+	}
+}
 	
 	//Driver I2C
 	
-void timer1_init(void){
-	//PB1 y PB2 como salida 
-	DDRB |= (1 << PB1) | (1 << PB2); 
-	//Configurar modo CTC
-	TCCR1A = 0;
-	TCCR1B = (1<<WGM12);
-}
-
 void i2c_init(void) {
 	TWSR = 0x00;
 	TWBR = 72; // 100 kHz @ 16 MHz
@@ -302,8 +304,6 @@ void silenciar(void) {
 	TCNT1 = 0;
 }
 
-
-
 //Lectura de botones (Piano Manual)
 
 void botones_init(void){
@@ -319,7 +319,7 @@ void usart_init(void) {
 	uint16_t ubrr = 103; // 9600 baudios @ F_CPU = 16 MHz
 	UBRR0H = (uint8_t)(ubrr >> 8);
 	UBRR0L = (uint8_t)ubrr;
-	UCSR0B = (1 << RXEN0) | (1 << TXEN0);
+	UCSR0B = (1 << RXEN0) | (1 << TXEN0) | (1 << RXCIE0); // RXCIE0 habilita ISR RX
 	UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
 }
 
@@ -334,17 +334,6 @@ int8_t obtener_nota_pulsada(void){
 	if (!(PINC & (1 << PC1))) return 7; // Do agudo
 	
 	return -1; //NIngun boton presionado 
-}
-
-//Modulo USART
-
-uint8_t usart_disponible(void) {
-	return (UCSR0A & (1 << RXC0));
-}
-
-char usart_recibir(void) {
-	while (!(UCSR0A & (1 << RXC0)));
-	return UDR0;
 }
 
 void usart_enviar_texto(const char* str) {
@@ -370,14 +359,12 @@ void mostrar_menu_serial(void) {
 uint8_t esperar_cancelacion(uint16_t milisegundos){
 	for (uint16_t = 0 ;t < milisegundos; t += 10){
 		_delay_ms(10);	
-		if (usart_disponible()){
-			char c=usart_recibir();
-			if (c=='S' || c=='s' || c=='0'){
-				return 1; //Se solicito detener la cancion
-			}
-		}
+	if (comando_uart == 'S' || comando_uart == 's' || comando_uart == '0') {
+		comando_uart = 0; // Limpia la bandera
+		return 1;         // Cancela inmediatamente
 	}
-	return 0; //Finalizo la espera normalmente
+}
+return 0;
 }
 
 uint8_t reproducir_cancion(const uint16_t* notas_base, const uint8_t* duraciones,const uint8_t total_notas){
@@ -416,20 +403,23 @@ int main(void)
 	botones_init();
 	usart_init();
 	lcd_init();
-		
+	
+	sei();	
 	mostrar_menu_serial();
 	preparar_modo_piano_lcd();
-
-	int8_t nota_actual= -1;
  
     while (1) 
     {
-		//Opcion recibida por UART
-		if(usart_disponible()){
-			char c = usart_recibir();
+		// Evalúa comando capturado en segundo plano por la ISR de la USART
+		if(comando_uart!= 0){
+			char c = comando_uart; // Limpia el comando una vez consumido
 			
-			if(c != '\r' && c != '\n' && c != ' '){
-				uint8_t cancelada = 0;	
+			uint8_t cancelada = 0;
+			
+			if(c== '1'){
+				usart_enviar_texto("\r\n[Sonando] 1- Osito Gominola...\r\n");
+				lcd_set_cursor(0, 0); lcd_print("C1: Osito Gom.  ");
+				lcd_set_cursor(1, 0); lcd_print("Sonando...      ");
 				
 	             if (c == '1') {
 		             usart_enviar_texto("\r\n[Sonando] 1- Osito Gominola...\r\n");
@@ -447,7 +437,7 @@ int main(void)
 		             mostrar_menu_serial();
 		             nota_anterior = -1;
 	             }
-	             else if (c == '2' || c == 'c' || c == 'C') {
+	             else if (c == '2') {
 		             usart_enviar_texto("\r\n[Sonando] 2- Mamma Mia (ABBA)...\r\n");
 		             lcd_set_cursor(0, 0); lcd_print("C2: Mamma Mia   ");
 		             lcd_set_cursor(1, 0); lcd_print("Sonando...      ");
