@@ -5,11 +5,62 @@
 #include <util/delay.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <avr/interrupt.h>
 
-// Pines del LED RGB
-#define LED_ROJO  PB0   // Arduino D8
-#define LED_VERDE PB2   // Arduino D10
-#define LED_AZUL  PB3   // Arduino D11
+// Pin de datos del LED WS2812
+#define LED_WS2812 PB0
+
+// Enviar un byte al WS2812 a 16 MHz
+// Cada bit dura 20 ciclos de reloj (1,25 us)
+static inline __attribute__((always_inline))
+void ws2812_enviar_byte(uint8_t dato)
+{
+    uint8_t contador = 8;
+
+    asm volatile(
+        "1:                         \n\t"
+        "sbi %[puerto], %[pin]       \n\t"
+        "nop                        \n\t"
+        "nop                        \n\t"
+        "sbrs %[dato], 7            \n\t"
+        "cbi %[puerto], %[pin]       \n\t"
+        "sbrc %[dato], 7            \n\t"
+        "nop                        \n\t"
+        "nop                        \n\t"
+        "nop                        \n\t"
+        "nop                        \n\t"
+        "nop                        \n\t"
+        "cbi %[puerto], %[pin]       \n\t"
+        "lsl %[dato]                \n\t"
+        "dec %[contador]            \n\t"
+        "brne 1b                    \n\t"
+        : [dato] "+r" (dato),
+          [contador] "+r" (contador)
+        : [puerto] "I" (_SFR_IO_ADDR(PORTB)),
+          [pin] "I" (LED_WS2812)
+        : "memory"
+    );
+}
+
+// Establecer el color del WS2812
+void ws2812_color(uint8_t rojo, uint8_t verde, uint8_t azul)
+{
+    // Guardar el estado de las interrupciones
+    uint8_t estado = SREG;
+
+    cli();
+
+    // Enviar los colores en orden GRB
+    ws2812_enviar_byte(verde);
+    ws2812_enviar_byte(rojo);
+    ws2812_enviar_byte(azul);
+
+    // Restaurar las interrupciones
+    SREG = estado;
+
+    // Tiempo de reinicio del WS2812
+    _delay_us(80);
+}
 
 // Valores de calibracion de los celofanes
 #define R_ROJO 795
@@ -268,15 +319,11 @@ int main(void)
     uint8_t color;
     char mensaje[64];
 
-    // Configurar LED RGB como salida
-    DDRB |= (1 << LED_ROJO) |
-            (1 << LED_VERDE) |
-            (1 << LED_AZUL);
+   // Configurar pin de datos del WS2812
+    DDRB |= (1 << LED_WS2812);
 
-    // Apagar los tres colores
-    PORTB &= ~((1 << LED_ROJO) |
-               (1 << LED_VERDE) |
-               (1 << LED_AZUL));
+    // Iniciar con la señal en bajo
+    PORTB &= ~(1 << LED_WS2812);
 
     // Inicializar componentes
     configurar_ADC();
@@ -298,28 +345,22 @@ int main(void)
     while (1)
     {
         // LED rojo
-        PORTB |= (1 << LED_ROJO);
+        ws2812_color(255, 0, 0);
         esperar_con_UART(300);
-
         rojo = leer_ADC();
 
-        PORTB &= ~(1 << LED_ROJO);
-
         // LED verde
-        PORTB |= (1 << LED_VERDE);
+        ws2812_color(0, 255, 0);
         esperar_con_UART(300);
-
         verde = leer_ADC();
 
-        PORTB &= ~(1 << LED_VERDE);
-
         // LED azul
-        PORTB |= (1 << LED_AZUL);
+        ws2812_color(0, 0, 255);
         esperar_con_UART(300);
-
         azul = leer_ADC();
 
-        PORTB &= ~(1 << LED_AZUL);
+        // Apagar WS2812
+        ws2812_color(0, 0, 0);
 
         // Mostrar mediciones
         snprintf(mensaje, sizeof(mensaje),
