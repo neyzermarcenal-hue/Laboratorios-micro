@@ -9,202 +9,298 @@
 #include <avr/interrupt.h>
 #include <util/delay.h>
 
+// Direccion de la pantalla LCD
 #define LCD_I2C_ADDR 0x27
+
+// Limites del sensor y margen de seguridad
+#define MAX_SENSOR_TEMP 50.0f
+#define SAFETY_MARGIN 20.0f
+
 #define LCD_BACKLIGHT 0x08
 #define LCD_EN        0x04
 #define LCD_RS        0x01
 
-volatile uint8_t sample_flag = 1;
-float punto_medio = 20.0f;
-float temp_actual = 0.0f;
+// DHT11 conectado al pin digital 2 (PD2)
+#define DHT_DDR   DDRD
+#define DHT_PORT  PORTD
+#define DHT_PINR  PIND
+#define DHT_BIT   PD2
+
+volatile uint8_t tomar_muestra = 0;
+float temperatura_objetivo = 20.0f;
+float temperatura = 0.0f;
+uint8_t humedad = 0;
 
 typedef enum {
-	STATE_HEATER_ON,
-	STATE_IDEAL,
-	STATE_FAN_LOW,
-	STATE_FAN_MED,
-	STATE_FAN_HIGH
-} SystemState;
+	CALEFACTOR,
+	IDEAL,
+	VENTILADOR_BAJO,
+	VENTILADOR_MEDIO,
+	VENTILADOR_ALTO
+} EstadoSistema;
 
-SystemState current_state = STATE_IDEAL;
+EstadoSistema estado_actual = IDEAL;
 
-// Driver TWI / I2C
-void twi_init(void) {
+// -------------------- I2C --------------------
+
+void iniciar_i2c(void) {
 	TWSR = 0x00;
-	TWBR = 72;
+	TWBR = 72; // Velocidad de 100 kHz
 }
 
-void twi_start(void) {
+void iniciar_comunicacion(void) {
 	uint16_t timeout = 10000;
 	TWCR = (1 << TWINT) | (1 << TWSTA) | (1 << TWEN);
 	while (!(TWCR & (1 << TWINT)) && --timeout);
 }
 
-void twi_stop(void) {
+void terminar_comunicacion(void) {
 	TWCR = (1 << TWINT) | (1 << TWEN) | (1 << TWSTO);
 	_delay_us(100);
 }
 
-void twi_write(uint8_t data) {
+void enviar_i2c(uint8_t dato) {
 	uint16_t timeout = 10000;
-	TWDR = data;
+	TWDR = dato;
 	TWCR = (1 << TWINT) | (1 << TWEN);
 	while (!(TWCR & (1 << TWINT)) && --timeout);
 }
 
-// Driver LCD I2C
-void lcd_i2c_send_nibble(uint8_t nibble) {
-	twi_start();
-	twi_write(LCD_I2C_ADDR << 1);
-	twi_write(nibble | LCD_EN);
+// -------------------- PANTALLA LCD --------------------
+
+void enviar_medio_byte(uint8_t dato) {
+	iniciar_comunicacion();
+	enviar_i2c(LCD_I2C_ADDR << 1);
+	enviar_i2c(dato | LCD_EN);
 	_delay_us(2);
-	twi_write(nibble & ~LCD_EN);
+	enviar_i2c(dato & ~LCD_EN);
 	_delay_us(50);
-	twi_stop();
+	terminar_comunicacion();
 }
 
-void lcd_i2c_send_byte(uint8_t val, uint8_t mode) {
-	uint8_t high = val & 0xF0;
-	uint8_t low = (val << 4) & 0xF0;
-	lcd_i2c_send_nibble(high | mode | LCD_BACKLIGHT);
-	lcd_i2c_send_nibble(low | mode | LCD_BACKLIGHT);
+void enviar_dato_lcd(uint8_t dato, uint8_t modo) {
+	uint8_t parte_alta = dato & 0xF0;
+	uint8_t parte_baja = (dato << 4) & 0xF0;
+
+	enviar_medio_byte(parte_alta | modo | LCD_BACKLIGHT);
+	enviar_medio_byte(parte_baja | modo | LCD_BACKLIGHT);
 }
 
-void lcd_command(uint8_t cmd) {
-	lcd_i2c_send_byte(cmd, 0);
-	if (cmd == 0x01 || cmd == 0x02) _delay_ms(2);
+void mandar_comando_lcd(uint8_t comando) {
+	enviar_dato_lcd(comando, 0);
+	if (comando == 0x01 || comando == 0x02) {
+		_delay_ms(2);
+	}
 }
 
-void lcd_char(char data) {
-	lcd_i2c_send_byte(data, LCD_RS);
+void mostrar_caracter(char caracter) {
+	enviar_dato_lcd(caracter, LCD_RS);
 }
 
-void lcd_string(const char* str) {
-	while (*str) lcd_char(*str++);
+void mostrar_texto(const char *texto) {
+	while (*texto) {
+		mostrar_caracter(*texto++);
+	}
 }
 
-void lcd_init(void) {
-	twi_init();
+void iniciar_lcd(void) {
+	iniciar_i2c();
 	_delay_ms(50);
-	lcd_i2c_send_nibble(0x30 | LCD_BACKLIGHT); _delay_ms(5);
-	lcd_i2c_send_nibble(0x30 | LCD_BACKLIGHT); _delay_us(150);
-	lcd_i2c_send_nibble(0x30 | LCD_BACKLIGHT); _delay_us(150);
-	lcd_i2c_send_nibble(0x20 | LCD_BACKLIGHT); _delay_ms(2);
-	lcd_command(0x28);
-	lcd_command(0x0C);
-	lcd_command(0x06);
-	lcd_command(0x01);
+
+	// Inicializar la pantalla en modo de 4 bits
+	enviar_medio_byte(0x30 | LCD_BACKLIGHT);
+	_delay_ms(5);
+	enviar_medio_byte(0x30 | LCD_BACKLIGHT);
+	_delay_us(150);
+	enviar_medio_byte(0x30 | LCD_BACKLIGHT);
+	_delay_us(150);
+	enviar_medio_byte(0x20 | LCD_BACKLIGHT);
+	_delay_ms(2);
+
+	mandar_comando_lcd(0x28); // Dos lineas
+	mandar_comando_lcd(0x0C); // Pantalla encendida, cursor apagado
+	mandar_comando_lcd(0x06); // Avanzar el cursor
+	mandar_comando_lcd(0x01); // Limpiar pantalla
 	_delay_ms(2);
 }
 
-void lcd_set_cursor(uint8_t row, uint8_t col) {
-	uint8_t addr = (row == 0) ? (0x80 + col) : (0xC0 + col);
-	lcd_command(addr);
+void ubicar_cursor(uint8_t fila, uint8_t columna) {
+	uint8_t direccion = (fila == 0) ? (0x80 + columna) : (0xC0 + columna);
+	mandar_comando_lcd(direccion);
 }
 
-// Driver USART
-void uart_init(unsigned int baud) {
-	unsigned int ubrr = F_CPU / 16 / baud - 1;
-	UBRR0H = (unsigned char)(ubrr >> 8);
-	UBRR0L = (unsigned char)ubrr;
-	UCSR0B = (1 << RXEN0) | (1 << TXEN0)  | (1<<RXCIE0) ;
-	UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
+// -------------------- COMUNICACION SERIAL --------------------
+
+void iniciar_serial(unsigned int velocidad) {
+	unsigned int valor = F_CPU / 16 / velocidad - 1;
+	UBRR0H = (unsigned char)(valor >> 8);
+	UBRR0L = (unsigned char)valor;
+	UCSR0B = (1 << RXEN0) | (1 << TXEN0) | (1 << RXCIE0);
+	UCSR0C = (1 << UCSZ01) | (1 << UCSZ00); // 8 bits, sin paridad, 1 bit de parada
 }
 
-void uart_transmit(unsigned char data) {
-	while (!(UCSR0A & (1 << UDRE0))); // Espera buffer libre
-	UDR0 = data;                       // Escritura directa al registro UDR0
+void enviar_caracter(char caracter) {
+	while (!(UCSR0A & (1 << UDRE0)));
+	UDR0 = caracter;
 }
 
-void uart_send_string(const char* str) {
-	while (*str) uart_transmit(*str++);
+void enviar_texto(const char *texto) {
+	while (*texto) {
+		enviar_caracter(*texto++);
+	}
 }
 
-// Conversión float a ASCII
-void send_float_custom(float val, void (*output_func)(char)) {
-	if (val < 0) { output_func('-'); val = -val; }
-	uint16_t entero = (uint16_t)val;
-	uint8_t decimal = (uint8_t)((val - (float)entero) * 10.0f + 0.5f);
-	if (decimal >= 10) { decimal = 0; entero++; }
-	
+// Pasar un numero decimal a texto sin usar printf
+void enviar_decimal(float numero, void (*salida)(char)) {
+	if (numero < 0) {
+		salida('-');
+		numero = -numero;
+	}
+
+	uint16_t entero = (uint16_t)numero;
+	uint8_t decimal = (uint8_t)((numero - (float)entero) * 10.0f + 0.5f);
+
+	if (decimal >= 10) {
+		decimal = 0;
+		entero++;
+	}
+
 	if (entero >= 100) {
-		output_func('0' + (entero / 100));
-		output_func('0' + ((entero / 10) % 10));
+		salida('0' + (entero / 100));
+		salida('0' + ((entero / 10) % 10));
 		} else if (entero >= 10) {
-		output_func('0' + (entero / 10));
+		salida('0' + (entero / 10));
 	}
-	output_func('0' + (entero % 10));
-	output_func('.');
-	output_func('0' + decimal);
+
+	salida('0' + (entero % 10));
+	salida('.');
+	salida('0' + decimal);
 }
 
-float custom_atof(const char* str) {
-	float res = 0.0f;
+// Pasar un numero entero a texto
+void enviar_entero(uint8_t numero, void (*salida)(char)) {
+	if (numero >= 100) salida('0' + (numero / 100));
+	if (numero >= 10) salida('0' + ((numero / 10) % 10));
+	salida('0' + (numero % 10));
+}
+
+void enviar_decimal_serial(float numero) {
+	enviar_decimal(numero, enviar_caracter);
+}
+
+void enviar_entero_serial(uint8_t numero) {
+	enviar_entero(numero, enviar_caracter);
+}
+
+void mostrar_decimal_lcd(float numero) {
+	enviar_decimal(numero, mostrar_caracter);
+}
+
+void mostrar_entero_lcd(uint8_t numero) {
+	enviar_entero(numero, mostrar_caracter);
+}
+
+// Convertir el texto recibido por serial a un numero
+float convertir_numero(const char *texto) {
+	float resultado = 0.0f;
 	float factor = 1.0f;
-	uint8_t is_decimal = 0;
-	while (*str) {
-		if (*str == '.') is_decimal = 1;
-		else if (*str >= '0' && *str <= '9') {
-			if (!is_decimal) res = res * 10.0f + (*str - '0');
-			else { factor /= 10.0f; res += (*str - '0') * factor; }
-		}
-		str++;
-	}
-	return res;
-}
+	uint8_t parte_decimal = 0;
 
-void uart_send_float(float val) { send_float_custom(val, uart_transmit); }
-void lcd_send_float(float val) { send_float_custom(val, lcd_char); }
-
-// Driver ADC
-void adc_init(void) {
-	ADMUX = (1 << REFS1) | (1 << REFS0); // Vref 1.1V
-	ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
-}
-
-uint16_t adc_read(uint8_t channel) {
-	ADMUX = (ADMUX & 0xF0) | (channel & 0x0F);
-	ADCSRA |= (1 << ADSC);
-	while (ADCSRA & (1 << ADSC));
-	return ADC;
-}
-
-// Lectura analógica simple
-float read_temperature_lm35(void) {
-	uint16_t samples[16];
-	for (uint8_t i = 0; i < 16; i++) {
-		samples[i] = adc_read(0);
-		_delay_us(200);
-	}
-	
-	// Ordenamiento por burbuja
-	for (uint8_t i = 0; i < 15; i++) {
-		for (uint8_t j = 0; j < 15 - i; j++) {
-			if (samples[j] > samples[j + 1]) {
-				uint16_t temp = samples[j];
-				samples[j] = samples[j + 1];
-				samples[j + 1] = temp;
+	while (*texto) {
+		if (*texto == '.') {
+			parte_decimal = 1;
+			} else if (*texto >= '0' && *texto <= '9') {
+			if (!parte_decimal) {
+				resultado = resultado * 10.0f + (*texto - '0');
+				} else {
+				factor /= 10.0f;
+				resultado += (*texto - '0') * factor;
 			}
 		}
+		texto++;
 	}
-	
-	// Promedio de las 10 muestras centrales
-	uint32_t sum = 0;
-	for (uint8_t i = 3; i < 13; i++) sum += samples[i];
-	
-	float adc_avg = (float)sum / 10.0f;
-	float voltage = (adc_avg * 1.1f) / 1024.0f;
-	return voltage * 100.0f;
+
+	return resultado;
 }
 
-void timer1_pwm_init(void) {
-	DDRB |= (1 << PB1) | (1 << PB0);
+// -------------------- SENSOR DHT11 --------------------
+
+static uint8_t esperar_nivel(uint8_t nivel, uint16_t tiempo_max) {
+	uint16_t tiempo = 0;
+
+	while (((DHT_PINR & (1 << DHT_BIT)) ? 1 : 0) != nivel) {
+		if (++tiempo > tiempo_max) return 0;
+		_delay_us(1);
+	}
+
+	return 1;
+}
+
+uint8_t leer_sensor(float *temp_leida, uint8_t *hum_leida) {
+	uint8_t datos[5] = {0, 0, 0, 0, 0};
+	uint8_t registro = SREG;
+
+	cli();
+
+	// Avisar al sensor que queremos leerlo
+	DHT_DDR |= (1 << DHT_BIT);
+	DHT_PORT &= ~(1 << DHT_BIT);
+	SREG = registro;
+	_delay_ms(20);
+	cli();
+
+	// Dejar el pin como entrada
+	DHT_PORT |= (1 << DHT_BIT);
+	_delay_us(30);
+	DHT_DDR &= ~(1 << DHT_BIT);
+
+	// Esperar la respuesta del sensor
+	if (!esperar_nivel(0, 100)) goto error;
+	if (!esperar_nivel(1, 100)) goto error;
+	if (!esperar_nivel(0, 100)) goto error;
+
+	// Leer los 40 bits enviados por el sensor
+	for (uint8_t i = 0; i < 40; i++) {
+		if (!esperar_nivel(1, 100)) goto error;
+		_delay_us(40);
+
+		if (DHT_PINR & (1 << DHT_BIT)) {
+			datos[i / 8] |= (1 << (7 - (i % 8)));
+		}
+
+		if (!esperar_nivel(0, 100)) goto error;
+	}
+
+	SREG = registro;
+
+	// Comprobar que los datos llegaron correctamente
+	if ((uint8_t)(datos[0] + datos[1] + datos[2] + datos[3]) != datos[4]) {
+		return 0;
+	}
+
+	*hum_leida = datos[0];
+
+	float temp = (float)datos[2] + (float)(datos[3] & 0x7F) / 10.0f;
+	if (datos[3] & 0x80) temp = -temp;
+	*temp_leida = temp;
+
+	return 1;
+
+	error:
+	SREG = registro;
+	return 0;
+}
+
+// -------------------- TEMPORIZADORES Y PWM --------------------
+
+void iniciar_pwm(void) {
+	DDRB |= (1 << PB1) | (1 << PB0); // LED verde en pin 8 y rojo en pin 9
 	TCCR1A = (1 << WGM10);
 	TCCR1B = (1 << WGM12) | (1 << CS11) | (1 << CS10);
 	OCR1A = 0;
 }
 
-void timer0_init(void) {
+void iniciar_temporizador(void) {
 	TCCR0A = (1 << WGM01);
 	TCCR0B = (1 << CS01) | (1 << CS00);
 	OCR0A = 249;
@@ -212,151 +308,217 @@ void timer0_init(void) {
 }
 
 ISR(TIMER0_COMPA_vect) {
-	static uint16_t count_5s = 0;
-	if (++count_5s >= 5000) {
-		sample_flag = 1;
-		count_5s = 0;
+	static uint16_t contador = 0;
+	contador++;
+
+	if (contador >= 5000) {
+		tomar_muestra = 1;
+		contador = 0;
 	}
 }
 
-char rx_buffer[16];
-volatile uint8_t rx_index = 0;
-volatile uint8_t command_ready = 0;
+// -------------------- RECIBIR COMANDOS --------------------
+
+char buffer_serial[16];
+volatile uint8_t indice_serial = 0;
+volatile uint8_t comando_listo = 0;
 
 ISR(USART_RX_vect) {
-	char ch = UDR0;
-	if (ch == '\r' || ch == '\n') {
-		if (rx_index > 0) {
-			rx_buffer[rx_index] = '\0';
-			command_ready = 1;
-			rx_index = 0;
+	char caracter = UDR0;
+
+	if (caracter == '\r' || caracter == '\n') {
+		if (indice_serial > 0) {
+			buffer_serial[indice_serial] = '\0';
+			comando_listo = 1;
+			indice_serial = 0;
 		}
-		} else if (rx_index < sizeof(rx_buffer) - 1) {
-		rx_buffer[rx_index++] = ch;
+		} else if (indice_serial < sizeof(buffer_serial) - 1) {
+		buffer_serial[indice_serial++] = caracter;
 	}
 }
 
-void process_uart_menu(void) {
-	if (!command_ready) return;
-	
-	float new_midpoint = custom_atof(rx_buffer);
-	if (new_midpoint <= 5.0f || (new_midpoint + SAFETY_MARGIN) >= MAX_SENSOR_TEMP) {
-		uart_send_string("\r\n[ERROR] Punto medio invalido!\r\n");
+void leer_comando(void) {
+	if (!comando_listo) return;
+
+	float nuevo_objetivo = convertir_numero(buffer_serial);
+
+	if (nuevo_objetivo <= 5.0f ||
+	(nuevo_objetivo + SAFETY_MARGIN) >= MAX_SENSOR_TEMP) {
+		enviar_texto("\r\n[ERROR] Punto medio invalido!\r\n");
 		} else {
-		punto_medio = new_midpoint;
-		uart_send_string("\r\n[OK] Nuevo PM: ");
-		uart_send_float(punto_medio);
-		uart_send_string(" C\r\n");
+		temperatura_objetivo = nuevo_objetivo;
+		enviar_texto("\r\n[OK] Nuevo PM: ");
+		enviar_decimal_serial(temperatura_objetivo);
+		enviar_texto(" C\r\n");
 	}
-	command_ready = 0;
+
+	comando_listo = 0;
 }
 
-void update_system_control(float temp) {
-	const char* action_str = "";
-	uint8_t state_changed;
-	
-	float low_limit   = punto_medio - 4.5f; // 15.5 °C
-	float high_limit  = punto_medio + 4.5f; // 24.5 °C
-	float fan_low_th  = high_limit;
-	float fan_med_th  = high_limit + 3.0f;  // 27.5 °C
-	float fan_high_th = high_limit + 6.0f;  // 30.5 °C
-	const float HYST  = 0.2f;
+// -------------------- CONTROL DE TEMPERATURA --------------------
 
+void controlar_temperatura(float temp, uint8_t hum) {
+	const char *accion = "";
 
+	float limite_bajo = temperatura_objetivo - 4.5f;
+	float limite_alto = temperatura_objetivo + 4.5f;
+
+	float limite_ventilador_bajo = limite_alto;
+	float limite_ventilador_medio = limite_alto + 3.0f;
+	float limite_ventilador_alto = limite_alto + 6.0f;
+
+	const float HIST = 0.2f;
+	uint8_t cambio_estado;
+
+	// Elegir el estado segun la temperatura medida
 	do {
-		state_changed = 0;
-		switch (current_state) {
-			case STATE_HEATER_ON:
-			if (temp >= (low_limit + HYST)) { current_state = STATE_IDEAL; state_changed = 1; }
+		cambio_estado = 0;
+
+		switch (estado_actual) {
+			case CALEFACTOR:
+			if (temp >= (limite_bajo + HIST)) {
+				estado_actual = IDEAL;
+				cambio_estado = 1;
+			}
 			break;
-			case STATE_IDEAL:
-			if (temp <= (low_limit - HYST)) { current_state = STATE_HEATER_ON; state_changed = 1; }
-			else if (temp >= (fan_low_th + HYST)) { current_state = STATE_FAN_LOW; state_changed = 1; }
+
+			case IDEAL:
+			if (temp <= (limite_bajo - HIST)) {
+				estado_actual = CALEFACTOR;
+				cambio_estado = 1;
+				} else if (temp >= (limite_ventilador_bajo + HIST)) {
+				estado_actual = VENTILADOR_BAJO;
+				cambio_estado = 1;
+			}
 			break;
-			
-			case STATE_FAN_LOW:
-			if (temp <= (fan_low_th - HYST)) { current_state = STATE_IDEAL; state_changed = 1; }
-			else if (temp >= (fan_med_th + HYST)) { current_state = STATE_FAN_MED; state_changed = 1; }
+
+			case VENTILADOR_BAJO:
+			if (temp <= (limite_ventilador_bajo - HIST)) {
+				estado_actual = IDEAL;
+				cambio_estado = 1;
+				} else if (temp >= (limite_ventilador_medio + HIST)) {
+				estado_actual = VENTILADOR_MEDIO;
+				cambio_estado = 1;
+			}
 			break;
-			case STATE_FAN_MED:
-			if (temp <= (fan_med_th - HYST)) { current_state = STATE_FAN_LOW; state_changed = 1; }
-			else if (temp >= (fan_high_th + HYST)) { current_state = STATE_FAN_HIGH; state_changed = 1; }
+
+			case VENTILADOR_MEDIO:
+			if (temp <= (limite_ventilador_medio - HIST)) {
+				estado_actual = VENTILADOR_BAJO;
+				cambio_estado = 1;
+				} else if (temp >= (limite_ventilador_alto + HIST)) {
+				estado_actual = VENTILADOR_ALTO;
+				cambio_estado = 1;
+			}
 			break;
-			case STATE_FAN_HIGH:
-			if (temp <= (fan_high_th - HYST)) { current_state = STATE_FAN_MED; state_changed = 1; }
+
+			case VENTILADOR_ALTO:
+			if (temp <= (limite_ventilador_alto - HIST)) {
+				estado_actual = VENTILADOR_MEDIO;
+				cambio_estado = 1;
+			}
 			break;
 		}
-	} while (state_changed); // 
+	} while (cambio_estado);
 
-	// Configuración de salidas físicas
-	switch (current_state) {
-		case STATE_HEATER_ON:
+	// Encender los LED segun el estado actual
+	switch (estado_actual) {
+		case CALEFACTOR:
 		TCCR1A &= ~(1 << COM1A1);
 		PORTB &= ~(1 << PB1);
 		PORTB |= (1 << PB0);
-		action_str = "Calefactor ON";
+		accion = "Calefactor ON";
 		break;
-		case STATE_IDEAL:
+
+		case IDEAL:
 		TCCR1A &= ~(1 << COM1A1);
 		PORTB &= ~((1 << PB0) | (1 << PB1));
-		action_str = "Ideal (Todo OFF)";
+		accion = "Ideal (Todo OFF)";
 		break;
-		
-		case STATE_FAN_LOW:
+
+		case VENTILADOR_BAJO:
 		TCCR1A |= (1 << COM1A1);
 		PORTB &= ~(1 << PB0);
-		OCR1A = 25; // 10% PWM
-		action_str = "Ventilador BAJO (10%)";
+		OCR1A = 25;
+		accion = "Ventilador BAJO (10%)";
 		break;
-		case STATE_FAN_MED:
+
+		case VENTILADOR_MEDIO:
 		TCCR1A |= (1 << COM1A1);
 		PORTB &= ~(1 << PB0);
-		OCR1A = 128; // 50% PWM
-		action_str = "Ventilador MEDIO (50%)";
+		OCR1A = 128;
+		accion = "Ventilador MEDIO (50%)";
 		break;
-		case STATE_FAN_HIGH:
+
+		case VENTILADOR_ALTO:
 		TCCR1A |= (1 << COM1A1);
 		PORTB &= ~(1 << PB0);
-		OCR1A = 255; // 100% PWM
-		action_str = "Ventilador ALTO (100%)";
+		OCR1A = 255;
+		accion = "Ventilador ALTO (100%)";
 		break;
 	}
-	uart_send_string("TEMP:"); uart_send_float(temp);
-	uart_send_string("|ACCION:"); uart_send_string(action_str);
-	uart_send_string("|PM:"); uart_send_float(punto_medio);
-	uart_send_string("\r\n");
 
-	lcd_set_cursor(0, 0);
-	lcd_string("Temp: ");
-	lcd_send_float(temp);
-	lcd_string(" C   ");
-	
-// Escribir en la fila 2 del LCD
-	lcd_set_cursor(1, 0);
-	lcd_string("Rango:");
-	lcd_send_float(low_limit);
-	lcd_char('-');
-	lcd_send_float(high_limit);
-	lcd_string("  ");
+	// Mostrar los datos por el monitor serial
+	enviar_texto("TEMP:");
+	enviar_decimal_serial(temp);
+	enviar_texto("|HUM:");
+	enviar_entero_serial(hum);
+	enviar_texto("|ACCION:");
+	enviar_texto(accion);
+	enviar_texto("|PM:");
+	enviar_decimal_serial(temperatura_objetivo);
+	enviar_texto("\r\n");
+
+	// Mostrar los datos en la pantalla LCD
+	ubicar_cursor(0, 0);
+	mostrar_texto("T:");
+	mostrar_decimal_lcd(temp);
+	mostrar_texto("C H:");
+	mostrar_entero_lcd(hum);
+	mostrar_texto("%  ");
+
+	ubicar_cursor(1, 0);
+	mostrar_texto("Rango:");
+	mostrar_decimal_lcd(limite_bajo);
+	mostrar_caracter('-');
+	mostrar_decimal_lcd(limite_alto);
+	mostrar_texto("  ");
 }
 
-int main(void)
-{
-	uart_init(9600);
-	lcd_init();
-	adc_init();
-	timer1_pwm_init();
-	timer0_init();
+// -------------------- PROGRAMA PRINCIPAL --------------------
+
+int main(void) {
+	iniciar_serial(9600);
+	iniciar_lcd();
+	iniciar_pwm();
+	iniciar_temporizador();
+
+	// Dejar el pin del DHT11 como entrada con pull-up
+	DHT_DDR &= ~(1 << DHT_BIT);
+	DHT_PORT |= (1 << DHT_BIT);
+
 	sei();
-    uart_send_string("\r\n=== SISTEMA CONTROL TEMPERATURA ATmega328P ===\r\n");
-    while (1) 
-    {
-		process_uart_menu(); // Monitorear menú RX
-		if (sample_flag) {
-			sample_flag = 0;
-			temp_actual = read_temperature_lm35();
-			update_system_control(temp_actual);
+
+	enviar_texto("\r\n=== SISTEMA CONTROL TEMPERATURA ATmega328P (DHT11) ===\r\n");
+
+	_delay_ms(1000); // Esperar a que el sensor este listo
+	tomar_muestra = 1;
+
+	while (1) {
+		leer_comando();
+
+		if (tomar_muestra) {
+			tomar_muestra = 0;
+
+			if (leer_sensor(&temperatura, &humedad)) {
+				controlar_temperatura(temperatura, humedad);
+				} else {
+				enviar_texto("[ERROR] Fallo de lectura DHT11\r\n");
+				ubicar_cursor(0, 0);
+				mostrar_texto("Error sensor    ");
+			}
 		}
-    }
+	}
 }
+
 
