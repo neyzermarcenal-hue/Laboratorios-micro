@@ -11,6 +11,29 @@
 #define LED_VERDE PB2   // Arduino D10
 #define LED_AZUL  PB3   // Arduino D11
 
+// Valores de calibracion de los celofanes
+#define R_ROJO 795
+#define G_ROJO 535
+#define B_ROJO 552
+
+#define R_VERDE 582
+#define G_VERDE 739
+#define B_VERDE 662
+
+#define R_AZUL 461
+#define G_AZUL 726
+#define B_AZUL 740
+
+#define R_AMARILLO 809
+#define G_AMARILLO 773
+#define B_AMARILLO 507
+
+// Tolerancia para reconocer los colores
+#define TOLERANCIA 10000UL
+
+// Ultimo color detectado
+uint8_t ultimo_color = 0;
+
 // Configuracion del ADC
 void configurar_ADC(void)
 {
@@ -150,9 +173,99 @@ void esperar_con_UART(uint16_t tiempo_ms)
     }
 }
 
+// Calcular diferencia al cuadrado
+uint32_t diferencia_cuadrada(uint16_t a, uint16_t b)
+{
+    int32_t diferencia = (int32_t)a - b;
+    return (uint32_t)(diferencia * diferencia);
+}
+
+// Comparar mediciones con un color calibrado
+uint32_t calcular_distancia(
+    uint16_t r, uint16_t g, uint16_t b,
+    uint16_t ref_r, uint16_t ref_g, uint16_t ref_b)
+{
+    return diferencia_cuadrada(r, ref_r) +
+           diferencia_cuadrada(g, ref_g) +
+           diferencia_cuadrada(b, ref_b);
+}
+
+// Detectar el color mas parecido
+uint8_t detectar_color(uint16_t r, uint16_t g, uint16_t b)
+{
+    uint32_t distancias[4];
+
+    distancias[0] = calcular_distancia(
+        r, g, b, R_ROJO, G_ROJO, B_ROJO);
+
+    distancias[1] = calcular_distancia(
+        r, g, b, R_VERDE, G_VERDE, B_VERDE);
+
+    distancias[2] = calcular_distancia(
+        r, g, b, R_AZUL, G_AZUL, B_AZUL);
+
+    distancias[3] = calcular_distancia(
+        r, g, b, R_AMARILLO, G_AMARILLO, B_AMARILLO);
+
+    uint32_t menor = distancias[0];
+    uint8_t color = 1;
+
+    for (uint8_t i = 1; i < 4; i++)
+    {
+        if (distancias[i] < menor)
+        {
+            menor = distancias[i];
+            color = i + 1;
+        }
+    }
+
+    if (menor > TOLERANCIA)
+        return 0;
+
+    return color;
+}
+
+// Mover el servo segun el color detectado
+void clasificar_color(uint8_t color)
+{
+    switch (color)
+    {
+        case 1:
+            enviar_texto("COLOR DETECTADO: ROJO\r\n");
+            if (ultimo_color != color)
+                mover_servo(20);
+            break;
+
+        case 2:
+            enviar_texto("COLOR DETECTADO: VERDE\r\n");
+            if (ultimo_color != color)
+                mover_servo(60);
+            break;
+
+        case 3:
+            enviar_texto("COLOR DETECTADO: AZUL\r\n");
+            if (ultimo_color != color)
+                mover_servo(110);
+            break;
+
+        case 4:
+            enviar_texto("COLOR DETECTADO: AMARILLO\r\n");
+            if (ultimo_color != color)
+                mover_servo(160);
+            break;
+
+        default:
+            enviar_texto("COLOR: DESCONOCIDO\r\n");
+            break;
+    }
+
+    ultimo_color = color;
+}
+
 int main(void)
 {
     uint16_t rojo, verde, azul;
+    uint8_t color;
     char mensaje[64];
 
     // Configurar LED RGB como salida
@@ -214,6 +327,14 @@ int main(void)
                  rojo, verde, azul);
 
         enviar_texto(mensaje);
+
+        // Detectar automaticamente el color
+        color = detectar_color(rojo, verde, azul);
+
+        // Mostrar el color y mover el servomotor
+        clasificar_color(color);
+
+        enviar_texto("--------------------\r\n");
 
         // Esperar antes de repetir
         esperar_con_UART(1500);
