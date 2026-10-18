@@ -9,7 +9,7 @@
 #define LED_VERDE PB0
 #define LED_ROJO PB1
 #define BUZZER PB2
-#define BOTON PD2
+#define PIR PD2
 #define UMBRAL_LDR 450
 
 static uint8_t armado = 0;
@@ -126,8 +126,8 @@ static void recibir(void) {
 
 int main(void) {
     DDRB |= (1 << LED_VERDE) | (1 << LED_ROJO) | (1 << BUZZER);
-    DDRD &= ~(1 << BOTON);
-    PORTD |= (1 << BOTON);
+    DDRD &= ~(1 << PIR);
+    PORTD &= ~(1 << PIR);
     uart_init();
     adc_init();
     salidas();
@@ -138,7 +138,7 @@ int main(void) {
     while (1) {
         recibir();
         uint8_t ventana = (leer_ldr() < UMBRAL_LDR);
-        uint8_t movimiento = !(PIND & (1 << BOTON));
+        uint8_t movimiento = (PIND & (1 << PIR)) != 0;
         uint8_t intrusion = ventana || movimiento;
 
         if (armado && automatico && intrusion && !alarma) {
