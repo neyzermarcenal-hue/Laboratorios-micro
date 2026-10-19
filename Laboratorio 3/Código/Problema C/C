@@ -8,7 +8,11 @@
 #include <avr/interrupt.h>
 
 // Pin de datos del LED WS2812
-#define LED_WS2812 PB0
+#define LED_WS2812 PD7   // D7 - Matriz WS2812B
+
+#define RGB_ROJO  PB0    // D8
+#define RGB_VERDE PB2    // D10
+#define RGB_AZUL  PB3    // D11
 
 // Enviar un byte al WS2812 a 16 MHz
 // Cada bit dura 20 ciclos de reloj (1,25 us)
@@ -36,8 +40,8 @@ void ws2812_enviar_byte(uint8_t dato)
         "brne 1b                    \n\t"
         : [dato] "+r" (dato),
           [contador] "+r" (contador)
-        : [puerto] "I" (_SFR_IO_ADDR(PORTB)),
-          [pin] "I" (LED_WS2812)
+       : [puerto] "I" (_SFR_IO_ADDR(PORTD)),
+  [pin] "I" (LED_WS2812)
         : "memory"
     );
 }
@@ -62,22 +66,85 @@ void ws2812_color(uint8_t rojo, uint8_t verde, uint8_t azul)
     _delay_us(80);
 }
 
+void configurar_RGB(void)
+{
+    DDRB |= (1 << RGB_ROJO) |
+            (1 << RGB_VERDE) |
+            (1 << RGB_AZUL);
+
+    PORTB &= ~((1 << RGB_ROJO) |
+               (1 << RGB_VERDE) |
+               (1 << RGB_AZUL));
+}
+
+void RGB_apagar(void)
+{
+    PORTB &= ~((1 << RGB_ROJO) |
+               (1 << RGB_VERDE) |
+               (1 << RGB_AZUL));
+}
+
+void RGB_rojo(void)
+{
+    RGB_apagar();
+    PORTB |= (1 << RGB_ROJO);
+}
+
+void RGB_verde(void)
+{
+    RGB_apagar();
+    PORTB |= (1 << RGB_VERDE);
+}
+
+void RGB_azul(void)
+{
+    RGB_apagar();
+    PORTB |= (1 << RGB_AZUL);
+}
+
 // Valores de calibracion de los celofanes
-#define R_ROJO 795
-#define G_ROJO 535
-#define B_ROJO 552
 
-#define R_VERDE 582
-#define G_VERDE 739
-#define B_VERDE 662
+#define NUM_LEDS 64
 
-#define R_AZUL 461
-#define G_AZUL 726
-#define B_AZUL 740
+void matriz_color(uint8_t rojo, uint8_t verde, uint8_t azul)
+{
+    uint8_t estado = SREG;
 
-#define R_AMARILLO 809
-#define G_AMARILLO 773
-#define B_AMARILLO 507
+    cli();
+
+    for (uint8_t i = 0; i < NUM_LEDS; i++)
+    {
+        ws2812_enviar_byte(verde);
+        ws2812_enviar_byte(rojo);
+        ws2812_enviar_byte(azul);
+    }
+
+    SREG = estado;
+
+    _delay_us(80);
+}
+
+// Valores de calibracion de los celofanes
+
+// ROJO
+#define R_ROJO 799
+#define G_ROJO 672
+#define B_ROJO 688
+
+// VERDE
+#define R_VERDE 658
+#define G_VERDE 768
+#define B_VERDE 731
+
+// AZUL
+#define R_AZUL 589
+#define G_AZUL 756
+#define B_AZUL 777
+
+// AMARILLO
+#define R_AMARILLO 826
+#define G_AMARILLO 813
+#define B_AMARILLO 697
 
 // Tolerancia para reconocer los colores
 #define TOLERANCIA 10000UL
@@ -283,36 +350,49 @@ void clasificar_color(uint8_t color)
     {
         case 1:
             enviar_texto("COLOR DETECTADO: ROJO\r\n");
+
             if (ultimo_color != color)
                 mover_servo(20);
+
+            matriz_color(50, 0, 0);    // Rojo
             break;
 
         case 2:
             enviar_texto("COLOR DETECTADO: VERDE\r\n");
+
             if (ultimo_color != color)
                 mover_servo(60);
+
+            matriz_color(0, 50, 0);    // Verde
             break;
 
         case 3:
             enviar_texto("COLOR DETECTADO: AZUL\r\n");
+
             if (ultimo_color != color)
                 mover_servo(110);
+
+            matriz_color(0, 0, 50);    // Azul
             break;
 
         case 4:
             enviar_texto("COLOR DETECTADO: AMARILLO\r\n");
+
             if (ultimo_color != color)
                 mover_servo(160);
+
+            matriz_color(50, 50, 0);   // Amarillo
             break;
 
         default:
             enviar_texto("COLOR: DESCONOCIDO\r\n");
+
+            matriz_color(0, 0, 0);     // Matriz apagada
             break;
     }
 
     ultimo_color = color;
 }
-
 int main(void)
 {
     uint16_t rojo, verde, azul;
@@ -320,10 +400,12 @@ int main(void)
     char mensaje[64];
 
    // Configurar pin de datos del WS2812
-    DDRB |= (1 << LED_WS2812);
+   // Configurar D7 para la matriz WS2812B
+    DDRD |= (1 << LED_WS2812);
+    PORTD &= ~(1 << LED_WS2812);
 
-    // Iniciar con la señal en bajo
-    PORTB &= ~(1 << LED_WS2812);
+// Configurar LED RGB
+configurar_RGB();
 
     // Inicializar componentes
     configurar_ADC();
@@ -344,23 +426,24 @@ int main(void)
 
     while (1)
     {
-        // LED rojo
-        ws2812_color(255, 0, 0);
+
+        // Encender rojo del LED RGB y medir
+        RGB_rojo();
         esperar_con_UART(300);
         rojo = leer_ADC();
 
-        // LED verde
-        ws2812_color(0, 255, 0);
+        // Encender verde del LED RGB y medir
+        RGB_verde();
         esperar_con_UART(300);
         verde = leer_ADC();
 
-        // LED azul
-        ws2812_color(0, 0, 255);
+        // Encender azul del LED RGB y medir
+        RGB_azul();
         esperar_con_UART(300);
         azul = leer_ADC();
 
-        // Apagar WS2812
-        ws2812_color(0, 0, 0);
+        // Apagar el LED RGB
+        RGB_apagar();
 
         // Mostrar mediciones
         snprintf(mensaje, sizeof(mensaje),

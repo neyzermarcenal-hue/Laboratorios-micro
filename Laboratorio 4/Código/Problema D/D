@@ -1,0 +1,91 @@
+#define F_CPU 16000000UL
+
+#include <avr/io.h>
+#include <util/delay.h>
+#include <stdio.h>
+#include <stdint.h>
+
+// Inicializacion del ADC
+void ADC_init(void)
+{
+    ADMUX = (1 << REFS0);
+
+    ADCSRA = (1 << ADEN) |
+             (1 << ADPS2) |
+             (1 << ADPS1) |
+             (1 << ADPS0);
+}
+
+// Leer canal analogico
+uint16_t ADC_leer(uint8_t canal)
+{
+    ADMUX = (ADMUX & 0xF0) | (canal & 0x0F);
+
+    ADCSRA |= (1 << ADSC);
+
+    while (ADCSRA & (1 << ADSC));
+
+    return ADC;
+}
+
+// Inicializar UART
+void UART_init(void)
+{
+    UBRR0H = 0;
+    UBRR0L = 103;
+
+    UCSR0B = (1 << RXEN0) | (1 << TXEN0);
+    UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
+}
+
+// Enviar caracter
+void UART_enviar(char dato)
+{
+    while (!(UCSR0A & (1 << UDRE0)));
+
+    UDR0 = dato;
+}
+
+// Enviar texto
+void UART_texto(const char *texto)
+{
+    while (*texto)
+    {
+        UART_enviar(*texto++);
+    }
+}
+
+int main(void)
+{
+    uint16_t x, y;
+    uint8_t boton;
+
+    char mensaje[60];
+
+    ADC_init();
+    UART_init();
+
+    // Boton del joystick como entrada
+    DDRD &= ~(1 << PD2);
+
+    // Activar resistencia pull-up
+    PORTD |= (1 << PD2);
+
+    UART_texto("LECTURA DE JOYSTICK\r\n");
+
+    while (1)
+    {
+        x = ADC_leer(0);
+        y = ADC_leer(1);
+
+        boton = !(PIND & (1 << PD2));
+
+        snprintf(mensaje, sizeof(mensaje),
+                 "X:%u Y:%u BOTON:%u\r\n",
+                 x, y, boton);
+
+        UART_texto(mensaje);
+
+        _delay_ms(200);
+    }
+}
