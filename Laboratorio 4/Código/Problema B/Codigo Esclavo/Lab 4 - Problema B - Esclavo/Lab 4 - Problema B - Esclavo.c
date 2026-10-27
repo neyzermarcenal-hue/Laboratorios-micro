@@ -15,6 +15,8 @@
 #define STOP  0x02
 #define VELOCIDAD 0x03
 #define PISTON 0x04
+#define PARO_EMERGENCIA 0x05
+#define REINICIAR 0x06
 
 volatile uint8_t piston_activo = 0;
 volatile uint8_t piston_tiempo = 0;
@@ -120,10 +122,17 @@ int main(void)
 	uint8_t comando;
 	uint8_t valor;
 	uint8_t marcha = 0;
+	uint8_t falla = 0;
 
 	// Configurar LED verde en PD2 como salida.
 	DDRD |= (1 << PD2);
 	PORTD &= ~(1 << PD2);
+
+	// Configurar LED rojo y buzzer como salidas.
+	// Buzzer de 3 pines: se supone activo con LOW.
+	PORTD |= (1 << PD4); // Apagar buzzer antes de configurar salida.
+	DDRD |= (1 << PD3) | (1 << PD4);
+	PORTD &= ~(1 << PD3);
 
 	motor_init();
 	servo_init();
@@ -141,7 +150,7 @@ int main(void)
 		switch (comando)
 		{
 			case START:
-			if (valor == 0)
+			if (valor == 0 && !falla)
 			{
 				marcha = 1;
 
@@ -168,14 +177,14 @@ int main(void)
 
 			case VELOCIDAD:
 			// Actualizar PWM solo si esta en marcha.
-			if (marcha)
+			if (marcha && !falla)
 			OCR0B = valor;
 			else
 			OCR0B = 0;
 			break;
 
 			case PISTON:
-			if (marcha && valor == 1)
+			if (marcha && !falla && valor == 1)
 			{
 				// Mover el servo durante 400 ms.
 				cli();
@@ -183,6 +192,37 @@ int main(void)
 				piston_activo = 1;
 				OCR1A = 4000;
 				sei();
+			}
+			break;
+
+			case PARO_EMERGENCIA:
+			// Detener motor y piston.
+			marcha = 0;
+			falla = 1;
+			motor_stop();
+
+			cli();
+			piston_activo = 0;
+			piston_tiempo = 0;
+			OCR1A = 2000;
+			sei();
+
+			// Apagar LED verde y activar alarma.
+			PORTD &= ~(1 << PD2);
+			PORTD |= (1 << PD3);  // LED rojo HIGH.
+			PORTD &= ~(1 << PD4); // Buzzer activo LOW.
+			break;
+
+			case REINICIAR:
+			if (valor == 0)
+			{
+				falla = 0;
+				marcha = 0;
+				motor_stop();
+
+				// Apagar LED rojo y buzzer.
+				PORTD &= ~(1 << PD3);
+				PORTD |= (1 << PD4);
 			}
 			break;
 
