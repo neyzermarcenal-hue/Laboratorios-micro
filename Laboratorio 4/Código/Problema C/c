@@ -32,11 +32,11 @@ static void timer1_init(void) {
 
     // 16 MHz / 64 = 250000 Hz
     // 250 ciclos = 1 ms //genera una interrupcion cada 1ms
-    OCR1A = 249;
+    OCR1A = 249;  // Estabelce el valor de comparacion
 
-    TCCR1B = (1 << WGM12) |
+    TCCR1B = (1 << WGM12) | // Configuea el modo CTC
              (1 << CS11) |
-             (1 << CS10);
+             (1 << CS10);  //Selecciona un prescaler de 64f
 
     TIMSK1 = (1 << OCIE1A); // Habilita la interrupción del Timer1 cuando el contador coincide con OCR1A
 }
@@ -501,7 +501,7 @@ int main(void) {
                 contando_pir = 1;
             }
 
-            if ((uint32_t)(ahora - inicio_pir) >= TIEMPO_PIR_MS) {
+            if ((uint32_t)(ahora - inicio_pir) >= TIEMPO_PIR_MS) { //Comprueba si transcurrieron 2000 milisegundos desde que comenzo la deteccion del PIR.
                 pir_confirmado = 1;
             }
 
