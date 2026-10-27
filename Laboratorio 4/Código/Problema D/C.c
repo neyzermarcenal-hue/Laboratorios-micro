@@ -297,3 +297,155 @@ void animacion_error(void)
 		_delay_ms(150);
 	}
 }
+
+int main(void)
+{
+	uart_init(MY_UBRR);
+	sw_init();
+	adc_init();
+	buzzer_init();
+	ws2812_init();
+
+	if (eeprom_read_byte(EE_MARCA_DIR) != EE_MARCA_VAL) {
+		eeprom_write_byte(EE_MARCA_DIR, EE_MARCA_VAL);
+		eeprom_write_word(EE_HS_DIR, 0);
+	}
+	record_historico = eeprom_read_word(EE_HS_DIR);
+
+	uart_print("\r\n=======================================");
+	uart_print("\r\n[SIMON DICE - WS2812B] Juego Iniciado");
+	uart_print("\r\n[EEPROM] Record Historico: Nivel ");
+	uart_print_num(record_historico);
+	uart_print("\r\n=======================================");
+
+	EstadoJuego estado = ST_INICIO;
+	Posicion cursor = {3, 3};
+	uint8_t paso_jugador = 0;
+	uint8_t joy_movido = 0;
+
+	while (1) {
+		semilla_random += adc_read(0) + adc_read(1);
+
+		switch (estado) {
+
+			case ST_INICIO:
+			animacion_inicio();
+			uart_print("\r\nPresione el boton del Joystick para comenzar...");
+			while (!sw_presionado()) {
+				_delay_ms(10);
+			}
+			nivel_actual = 1;
+			estado = ST_GENERAR_SECUENCIA;
+			break;
+
+			case ST_GENERAR_SECUENCIA:
+			secuencia[nivel_actual - 1].fila = obtener_random() % 8;
+			secuencia[nivel_actual - 1].col = obtener_random() % 8;
+
+			uart_print("\r\n---------------------------------------");
+			uart_print("\r\nNIVEL "); uart_print_num(nivel_actual);
+			uart_print(" | Record: "); uart_print_num(record_historico);
+
+			estado = ST_REPRODUCIR_SECUENCIA;
+			break;
+
+			case ST_REPRODUCIR_SECUENCIA:
+			_delay_ms(600);
+			for (uint8_t i = 0; i < nivel_actual; i++) {
+				ws2812_clear();
+				ws2812_set_pixel(secuencia[i].fila, secuencia[i].col, COLOR_OBJETIVO);
+				ws2812_render();
+				
+				tono(400 + (secuencia[i].fila * 40) + (secuencia[i].col * 20), 500);
+				
+				ws2812_clear();
+				_delay_ms(200);
+			}
+			paso_jugador = 0;
+			cursor.fila = 3;
+			cursor.col = 3;
+			estado = ST_TURNO_JUGADOR;
+			break;
+
+			case ST_TURNO_JUGADOR:
+			ws2812_clear();
+			ws2812_set_pixel(cursor.fila, cursor.col, COLOR_CURSOR);
+			ws2812_render();
+
+			uint16_t adc_x = adc_read(0); /* PC0 */
+			uint16_t adc_y = adc_read(1); /* PC1 */
+
+			if (adc_x < DEADZONE_LOW && !joy_movido) {
+				if (cursor.col > 0) cursor.col--;
+				joy_movido = 1;
+				tono(800, 30);
+				} else if (adc_x > DEADZONE_HIGH && !joy_movido) {
+				if (cursor.col < 7) cursor.col++;
+				joy_movido = 1;
+				tono(800, 30);
+				} else if (adc_y < DEADZONE_LOW && !joy_movido) {
+				if (cursor.fila > 0) cursor.fila--;
+				joy_movido = 1;
+				tono(800, 30);
+				} else if (adc_y > DEADZONE_HIGH && !joy_movido) {
+				if (cursor.fila < 7) cursor.fila++;
+				joy_movido = 1;
+				tono(800, 30);
+			} else if (adc_x >= DEADZONE_LOW && adc_x <= DEADZONE_HIGH &&
+			adc_y >= DEADZONE_LOW && adc_y <= DEADZONE_HIGH) {
+				joy_movido = 0;
+			}
+
+			if (sw_presionado()) {
+				uart_print("\r\nSeleccion: [Fila "); uart_print_num(cursor.fila);
+				uart_print(", Col "); uart_print_num(cursor.col); uart_print("]");
+
+				if (cursor.fila == secuencia[paso_jugador].fila &&
+				cursor.col == secuencia[paso_jugador].col) {
+					
+					ws2812_set_pixel(cursor.fila, cursor.col, COLOR_CORRECTO);
+					ws2812_render();
+					tono(1000, 150);
+					
+					paso_jugador++;
+					if (paso_jugador >= nivel_actual) {
+						estado = ST_EXITO_NIVEL;
+					}
+					} else {
+					estado = ST_GAME_OVER;
+				}
+			}
+			_delay_ms(20);
+			break;
+
+			case ST_EXITO_NIVEL:
+			uart_print(" -> CORRECTO!");
+			sonido_exito();
+
+			if (nivel_actual > record_historico) {
+				record_historico = nivel_actual;
+				eeprom_write_word(EE_HS_DIR, record_historico);
+				uart_print(" (NUEVO RECORD EN EEPROM)");
+			}
+
+			nivel_actual++;
+			if (nivel_actual > MAX_NIVEL) {
+				nivel_actual = MAX_NIVEL;
+			}
+			_delay_ms(500);
+			estado = ST_GENERAR_SECUENCIA;
+			break;
+
+			case ST_GAME_OVER:
+			uart_print(" -> ERROR!");
+			animacion_error();
+			sonido_error();
+			uart_print("\r\n[GAME OVER] Puntuacion alcanzada: Nivel ");
+			uart_print_num(nivel_actual);
+			
+			_delay_ms(1000);
+			estado = ST_INICIO;
+			break;
+		}
+	}
+}
