@@ -216,6 +216,19 @@ void tono(uint16_t freq_hz, uint16_t duracion_ms)
 	}
 }
 
+void sonido_exito(void)
+{
+	tono(523, 100); _delay_ms(50);
+	tono(659, 100); _delay_ms(50);
+	tono(784, 150);
+}
+
+void sonido_error(void)
+{
+	tono(200, 200); _delay_ms(50);
+	tono(150, 400);
+}
+
 /* BOTÓN JOYSTICK */
 
 void sw_init(void)
@@ -235,4 +248,52 @@ uint8_t sw_presionado(void)
 		}
 	}
 	return 0;
+}
+
+/*LÓGICA DEL JUEGO*/
+
+Posicion secuencia[MAX_NIVEL];
+uint16_t nivel_actual = 1;
+uint16_t record_historico = 0;
+uint16_t semilla_random = 0;
+
+uint16_t obtener_random(void)
+{
+	semilla_random = (semilla_random * 2053 + 13849) % 65535;
+	return semilla_random;
+}
+
+void animacion_inicio(void)
+{
+	for (uint8_t r = 0; r < 8; r++) {
+		for (uint8_t c = 0; c < 8; c++) {
+			ColorRGB col = {r * 30, c * 30, (r + c) * 15};
+			ws2812_set_pixel(r, c, col);
+		}
+	}
+	ws2812_render();
+	tono(440, 100); _delay_ms(100);
+	tono(880, 200);
+	_delay_ms(400);
+	ws2812_clear();
+}
+
+void animacion_error(void)
+{
+	for (uint8_t i = 0; i < 3; i++) {
+		for (uint8_t r = 0; r < 8; r++) {
+			for (uint8_t c = 0; c < 8; c++) {
+				if (r == c || r == (7 - c)) {
+					ws2812_set_pixel(r, c, COLOR_ERROR);
+					} else {
+					ws2812_set_pixel(r, c, COLOR_APAGADO);
+				}
+			}
+		}
+		ws2812_render();
+		tono(180, 100);
+		_delay_ms(150);
+		ws2812_clear();
+		_delay_ms(150);
+	}
 }
