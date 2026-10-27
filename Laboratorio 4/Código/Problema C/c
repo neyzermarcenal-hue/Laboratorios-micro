@@ -1,7 +1,6 @@
 #ifndef F_CPU
 #define F_CPU 16000000UL
 #endif
-#include <SoftwareSerial.h>
 #include <avr/io.h>
 #include <util/delay.h>
 #include <stdlib.h>
@@ -10,8 +9,6 @@
 #include <stdint.h>
 #include <avr/interrupt.h>
 #include <util/atomic.h>
-
-SoftwareSerial bluetooth(3, 4); // RX=D3, TX=D4
 
 #define LED_VERDE PB0
 #define LED_ROJO PB1
@@ -24,24 +21,24 @@ SoftwareSerial bluetooth(3, 4); // RX=D3, TX=D4
 volatile uint32_t tiempo_ms = 0;
 
 // Timer1: interrupcion cada 1 ms
-ISR(TIMER1_COMPA_vect) {
+ISR(TIMER1_COMPA_vect) { //Permite medir el tiempo y comprobar si el PIR detectó movimiento durante 2 segundos.
     tiempo_ms++;
 }
 
 static void timer1_init(void) {
-    TCCR1A = 0;
-    TCCR1B = 0;
-    TCNT1 = 0;
+    TCCR1A = 0; //Limpia la onfiguracion inicial del Timer1
+    TCCR1B = 0; //Reinicia la configuracion del reloj del Timer1              
+    TCNT1 = 0; //Pone el contador en 0
 
     // 16 MHz / 64 = 250000 Hz
-    // 250 ciclos = 1 ms
+    // 250 ciclos = 1 ms //genera una interrupcion cada 1ms
     OCR1A = 249;
 
     TCCR1B = (1 << WGM12) |
              (1 << CS11) |
              (1 << CS10);
 
-    TIMSK1 = (1 << OCIE1A);
+    TIMSK1 = (1 << OCIE1A); // Habilita la interrupción del Timer1 cuando el contador coincide con OCR1A
 }
 
 static uint32_t millis_timer(void) {
@@ -67,19 +64,116 @@ typedef enum {
 
 static Estado estado_actual = DESARMADO;
 
+// UART USB por hardware (D0/D1)
+// Bluetooth por software (D3/D4)
+
+#define BT_RX PD3
+#define BT_TX PD4
+#define BT_BUF_SIZE 64
+
+static volatile uint8_t bt_buffer[BT_BUF_SIZE];
+static volatile uint8_t bt_cabeza = 0;
+static volatile uint8_t bt_cola = 0;
+
+// Interrupcion para recibir Bluetooth por D3
+ISR(PCINT2_vect) { //Porque el Bluetooth está conectado a D3 y D4, y necesitamos recibir datos por software sin utilizar la UART física del Arduino.
+
+    if (PIND & (1 << BT_RX)) return;
+
+    PCMSK2 &= ~(1 << PCINT19);
+
+    _delay_us(156);
+
+    uint8_t dato = 0;
+
+    for (uint8_t i = 0; i < 8; i++) {
+        if (PIND & (1 << BT_RX)) {
+            dato |= (1 << i);
+        }
+
+        _delay_us(104);
+    }
+
+    uint8_t siguiente =
+        (uint8_t)((bt_cabeza + 1) % BT_BUF_SIZE);
+
+    if (siguiente != bt_cola) {
+        bt_buffer[bt_cabeza] = dato;
+        bt_cabeza = siguiente;
+    }
+
+    PCIFR = (1 << PCIF2);
+    PCMSK2 |= (1 << PCINT19);
+}
+
+// Enviar un caracter al Bluetooth por D4
+static void bt_enviar_caracter(char c) {
+
+    uint8_t sreg = SREG;
+    cli(); //Deshabilita temporalmente las interrupciones globales.
+
+    PORTD &= ~(1 << BT_TX);
+    _delay_us(104);
+
+    for (uint8_t i = 0; i < 8; i++) {
+
+        if (c & (1 << i)) {
+            PORTD |= (1 << BT_TX);
+        } else {
+            PORTD &= ~(1 << BT_TX);
+        }
+
+        _delay_us(104);
+    }
+
+    PORTD |= (1 << BT_TX);
+    _delay_us(104);
+
+    SREG = sreg;
+}
+
 // Modo seleccionado para el proximo armado
 static uint8_t modo_seleccionado = 1; // 1 = AUTO, 0 = MANUAL
 
-// Buffer para recibir comandos por Bluetooth
 
 static void uart_init(void) {
-    Serial.begin(9600);      // Computadora por USB
-    bluetooth.begin(9600);   // Celular por HC-05
+
+    // UART USB a 9600 baudios
+    UBRR0H = 0;
+    UBRR0L = 103;
+
+    UCSR0A = 0;
+    UCSR0B = (1 << RXEN0) | (1 << TXEN0);
+    UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
+
+    // Bluetooth RX en D3
+    DDRD &= ~(1 << BT_RX);
+    PORTD &= ~(1 << BT_RX);
+
+    // Bluetooth TX en D4
+    PORTD |= (1 << BT_TX);
+    DDRD |= (1 << BT_TX);
+
+    // Habilitar interrupcion de D3
+    PCICR |= (1 << PCIE2);
+    PCMSK2 |= (1 << PCINT19);
 }
 
 static void uart_texto(const char *s) {
-    Serial.print(s);       // Respuesta a la computadora
-    bluetooth.print(s);    // Respuesta al celular
+
+    while (*s) {
+
+        // Enviar a la computadora por USB
+        while (!(UCSR0A & (1 << UDRE0))) {
+        }
+
+        UDR0 = *s;
+
+        // Enviar al celular por Bluetooth
+        bt_enviar_caracter(*s);
+
+        s++;
+    }
 }
 
 static void adc_init(void) {
@@ -163,11 +257,11 @@ static void estado(void) {
                "MODO:AUTO;" : "MODO:MANUAL;");
 
     snprintf(texto, sizeof(texto),
-         "LDR:%u;PIR:%u\r\n",
-         leer_ldr(),
-         (unsigned int)((PIND & (1 << PIR)) != 0));
+    "LDR:%u;PIR:%u\r\n",
+    (unsigned int)leer_ldr(),
+    (unsigned int)((PIND & (1 << PIR)) != 0));
 
-    uart_texto(texto);
+uart_texto(texto);
 }
 
 static void procesar(const char *c) {
@@ -332,28 +426,39 @@ static void recibir(void) {
     static uint8_t indice_usb = 0;
     static uint8_t indice_bt = 0;
 
-    // Comandos desde la computadora
-    while (Serial.available() > 0) {
+    // Recibir comandos desde la computadora
+    while (UCSR0A & (1 << RXC0)) {
+
         recibir_caracter(
-            (char)Serial.read(),
+            (char)UDR0,
             comando_usb,
             &indice_usb
         );
     }
 
-    // Comandos desde el celular
-    while (bluetooth.available() > 0) {
+    // Recibir comandos desde el Bluetooth
+    while (bt_cola != bt_cabeza) {
+
+        char c = (char)bt_buffer[bt_cola];
+
+        bt_cola =
+            (uint8_t)((bt_cola + 1) % BT_BUF_SIZE);
+
         recibir_caracter(
-            (char)bluetooth.read(),
+            c,
             comando_bt,
             &indice_bt
         );
     }
 }
+// Variables para confirmar movimiento del PIR
+static uint32_t inicio_pir = 0;
+static uint8_t contando_pir = 0;
+static uint8_t pir_confirmado = 0;
 
-void setup() {
+int main(void) {
 
-    // Configurar LED verde, LED rojo y buzzer como salidas
+    // Configurar salidas
     DDRB |= (1 << LED_VERDE) |
             (1 << LED_ROJO) |
             (1 << BUZZER);
@@ -362,68 +467,53 @@ void setup() {
     DDRD &= ~(1 << PIR);
     PORTD &= ~(1 << PIR);
 
-    // Inicializar UART y ADC
+    // Inicializaciones
     uart_init();
     adc_init();
     timer1_init();
     sei();
 
-    // Estado inicial de la maquina Moore
     estado_actual = DESARMADO;
     salidas();
 
     uart_texto("SISTEMA DE ALARMA LISTO\r\n");
     uart_texto("COMANDOS: ARMAR DESARMAR AUTO MANUAL ALARMA SILENCIO RESTABLECER APAGAR ESTADO\r\n");
 
-}
+    while (1) {
 
-// Variables del filtro PIR
-static uint32_t inicio_pir = 0;
-static uint8_t contando_pir = 0;
-static uint8_t pir_confirmado = 0;
-
-void loop() {
-
-        // Procesar comandos recibidos por Bluetooth
         recibir();
 
-        // Leer sensores
-uint16_t valor_ldr = leer_ldr();
+        uint16_t valor_ldr = leer_ldr();
+        uint8_t ventana = (valor_ldr < UMBRAL_LDR);
 
-uint8_t ventana = (valor_ldr < UMBRAL_LDR);
+        uint8_t pir_actual =
+            ((PIND & (1 << PIR)) != 0);
 
-// Lectura directa del PIR
-uint8_t pir_actual = ((PIND & (1 << PIR)) != 0);
+        uint32_t ahora = millis_timer();
 
-// Tiempo actual del sistema
-uint32_t ahora = millis_timer();
+        // Confirmación del PIR
+        if ((estado_actual == ARMADO_AUTO ||
+             estado_actual == ALARMA_AUTO ||
+             estado_actual == SILENCIO_AUTO) && pir_actual) {
 
-// Filtro de 2 segundos para el PIR
-if ((estado_actual == ARMADO_AUTO ||
-     estado_actual == ALARMA_AUTO ||
-     estado_actual == SILENCIO_AUTO) && pir_actual) {
-    if (!contando_pir) {
-        inicio_pir = ahora;
-        contando_pir = 1;
-    }
+            if (!contando_pir) {
+                inicio_pir = ahora;
+                contando_pir = 1;
+            }
 
-    if ((uint32_t)(ahora - inicio_pir) >= TIEMPO_PIR_MS) {
-        pir_confirmado = 1;
-    }
+            if ((uint32_t)(ahora - inicio_pir) >= TIEMPO_PIR_MS) {
+                pir_confirmado = 1;
+            }
 
-} else {
-    contando_pir = 0;
-    pir_confirmado = 0;
-}
+        } else {
+            contando_pir = 0;
+            pir_confirmado = 0;
+        }
 
-// Movimiento confirmado
-uint8_t movimiento = pir_confirmado;
+        uint8_t movimiento = pir_confirmado;
+        uint8_t intrusion = ventana || movimiento;
 
-// Intrusion por cualquiera de los sensores
-uint8_t intrusion = ventana || movimiento;
-
-        
-        // Transicion automatica de la maquina Moore
+        // Transición automática Moore
         if (estado_actual == ARMADO_AUTO && intrusion) {
 
             estado_actual = ALARMA_AUTO;
@@ -433,15 +523,10 @@ uint8_t intrusion = ventana || movimiento;
             } else {
                 uart_texto("ALARMA:ON;ZONA:MOVIMIENTO\r\n");
             }
-
-
         }
 
-
-        // Actualizar las salidas segun el estado Moore
         salidas();
-
-        
-        // Sin retardo para recibir comandos UART a tiempo
     }
 
+    return 0;
+}
