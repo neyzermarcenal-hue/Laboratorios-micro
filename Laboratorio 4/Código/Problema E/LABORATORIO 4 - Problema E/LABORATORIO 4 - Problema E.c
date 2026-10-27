@@ -7,12 +7,6 @@
 #include <math.h>
 #include <stdio.h>
 
-// Laboratorio 4 - Problema E - Commit 1
-// ATmega328P a 16 MHz
-// MPU6050: SDA=A4, SCL=A5, AD0=GND
-// Matriz WS2812B: DIN=D11
-// Terminal serial: TX=D1, 9600 baudios
-
 #define MPU_DIR 0x68
 #define N_LEDS 64
 #define N_DATOS (N_LEDS * 15)
@@ -321,6 +315,70 @@ uint8_t *azul)
 	}
 }
 
+// Timer1 para medir el tiempo entre lecturas
+void timer1_init(void)
+{
+	TCCR1A = 0;
+	TCCR1B = (1 << CS11) | (1 << CS10);
+	TCNT1 = 0;
+}
+
+float periodo_muestreo(void)
+{
+	uint16_t tiempo = TCNT1;
+	TCNT1 = 0;
+
+	float periodo = (float)tiempo * 0.000004f;
+
+	if (periodo < 0.005f || periodo > 0.25f)
+	periodo = 0.1f;
+
+	return periodo;
+}
+
+// Combinar acelerometro y giroscopio
+void actualizar_filtro(int16_t ax, int16_t ay, int16_t az,
+int16_t gx, int16_t gy,
+float periodo,
+float *roll, float *pitch,
+uint8_t *primera_lectura)
+{
+	float roll_acelerometro;
+	float pitch_acelerometro;
+
+	calcular_angulos(ax, ay, az,
+	&roll_acelerometro,
+	&pitch_acelerometro);
+
+	if (*primera_lectura)
+	{
+		*roll = roll_acelerometro;
+		*pitch = pitch_acelerometro;
+		*primera_lectura = 0;
+	}
+	else
+	{
+		*roll = 0.96f * (*roll +
+		((float)gx / 131.0f) * periodo)
+		+ 0.04f * roll_acelerometro;
+
+		*pitch = 0.96f * (*pitch +
+		((float)gy / 131.0f) * periodo)
+		+ 0.04f * pitch_acelerometro;
+	}
+}
+
+// Detectar la pulsacion del boton HOLD
+uint8_t boton_pulsado(uint8_t pin, uint8_t *estado_anterior)
+{
+	uint8_t presionado = !(PIND & (1 << pin));
+	uint8_t pulsacion = presionado && !(*estado_anterior);
+
+	*estado_anterior = presionado;
+
+	return pulsacion;
+}
+
 // Programa principal
 int main(void)
 {
@@ -339,6 +397,19 @@ int main(void)
 
 	char mensaje[48];
 
+	uint8_t primera_lectura = 1;
+	uint8_t hold = 0;
+	uint8_t estado_anterior_hold = 0;
+
+	uint8_t x_anterior = 255;
+	uint8_t y_anterior = 255;
+	uint8_t rojo_anterior = 255;
+	uint8_t verde_anterior = 255;
+	uint8_t azul_anterior = 255;
+
+	DDRD &= ~(1 << PD2);
+	PORTD |= (1 << PD2);
+
 	uart_init();
 	i2c_init();
 	matriz_init();
@@ -351,21 +422,46 @@ int main(void)
 	else
 	uart_texto("ERROR MPU6050\r\n");
 
+	timer1_init();
+
 	while (1)
 	{
+		float periodo = periodo_muestreo();
+
 		if (mpu_leer(&ax, &ay, &az, &gx, &gy))
 		{
-			calcular_angulos(ax, ay, az, &roll, &pitch);
+			actualizar_filtro(ax, ay, az, gx, gy,
+			periodo, &roll, &pitch,
+			&primera_lectura);
 
-			color_burbuja(roll, pitch,
-			&x, &y,
-			&rojo, &verde, &azul);
+			if (boton_pulsado(PD2, &estado_anterior_hold))
+			hold = !hold;
 
-			matriz_mostrar(x, y, rojo, verde, azul);
+			if (!hold)
+			{
+				color_burbuja(roll, pitch,
+				&x, &y,
+				&rojo, &verde, &azul);
+
+				if (x != x_anterior || y != y_anterior ||
+				rojo != rojo_anterior ||
+				verde != verde_anterior ||
+				azul != azul_anterior)
+				{
+					matriz_mostrar(x, y, rojo, verde, azul);
+
+					x_anterior = x;
+					y_anterior = y;
+					rojo_anterior = rojo;
+					verde_anterior = verde;
+					azul_anterior = azul;
+				}
+			}
 
 			snprintf(mensaje, sizeof(mensaje),
-			"ROLL:%d PITCH:%d\r\n",
-			(int)roll, (int)pitch);
+			"ROLL:%d PITCH:%d %s\r\n",
+			(int)roll, (int)pitch,
+			hold ? "HOLD" : "NORMAL");
 
 			uart_texto(mensaje);
 		}
