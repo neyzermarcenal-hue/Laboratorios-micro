@@ -1,39 +1,85 @@
+#ifndef F_CPU
 #define F_CPU 16000000UL
+#endif
+#include <SoftwareSerial.h>
 #include <avr/io.h>
 #include <util/delay.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <avr/interrupt.h>
+#include <util/atomic.h>
+
+SoftwareSerial bluetooth(3, 4); // RX=D3, TX=D4
 
 #define LED_VERDE PB0
 #define LED_ROJO PB1
 #define BUZZER PB2
 #define PIR PD2
-#define UMBRAL_LDR 450
+#define UMBRAL_LDR 100
 
-static uint8_t armado = 0;
-static uint8_t automatico = 1;
-static uint8_t alarma = 0;
-static uint8_t silencio = 0;
-static char comando[20];
-static uint8_t indice = 0;
+#define TIEMPO_PIR_MS 2000UL
 
-static void uart_init(void) {
-    UBRR0H = 0;
-    UBRR0L = 103;  // 9600 baudios con reloj de 16 MHz
-    UCSR0A = 0;
-    UCSR0B = (1 << RXEN0) | (1 << TXEN0);
-    UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
+volatile uint32_t tiempo_ms = 0;
+
+// Timer1: interrupcion cada 1 ms
+ISR(TIMER1_COMPA_vect) {
+    tiempo_ms++;
 }
 
-static void uart_char(char c) {
-    while (!(UCSR0A & (1 << UDRE0))) { }
-    UDR0 = c;
+static void timer1_init(void) {
+    TCCR1A = 0;
+    TCCR1B = 0;
+    TCNT1 = 0;
+
+    // 16 MHz / 64 = 250000 Hz
+    // 250 ciclos = 1 ms
+    OCR1A = 249;
+
+    TCCR1B = (1 << WGM12) |
+             (1 << CS11) |
+             (1 << CS10);
+
+    TIMSK1 = (1 << OCIE1A);
+}
+
+static uint32_t millis_timer(void) {
+    uint32_t tiempo;
+
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        tiempo = tiempo_ms;
+    }
+
+    return tiempo;
+}
+
+// Estados de la maquina de estados finitos (Moore)
+typedef enum {
+    DESARMADO,
+    ARMADO_AUTO,
+    ARMADO_MANUAL,
+    ALARMA_AUTO,
+    ALARMA_MANUAL,
+    SILENCIO_AUTO,
+    SILENCIO_MANUAL
+} Estado;
+
+static Estado estado_actual = DESARMADO;
+
+// Modo seleccionado para el proximo armado
+static uint8_t modo_seleccionado = 1; // 1 = AUTO, 0 = MANUAL
+
+// Buffer para recibir comandos por Bluetooth
+
+static void uart_init(void) {
+    Serial.begin(9600);      // Computadora por USB
+    bluetooth.begin(9600);   // Celular por HC-05
 }
 
 static void uart_texto(const char *s) {
-    while (*s) uart_char(*s++);
+    Serial.print(s);       // Respuesta a la computadora
+    bluetooth.print(s);    // Respuesta al celular
 }
 
 static void adc_init(void) {
@@ -48,110 +94,354 @@ static uint16_t leer_ldr(void) {
     return ADC;
 }
 
+// Salidas de la maquina de estados Moore
 static void salidas(void) {
-    if (armado) PORTB |= (1 << LED_VERDE);
-    else PORTB &= ~(1 << LED_VERDE);
 
-    if (alarma) PORTB |= (1 << LED_ROJO);
-    else PORTB &= ~(1 << LED_ROJO);
+    uint8_t verde = (estado_actual != DESARMADO);
 
-    if (alarma && !silencio) PORTB |= (1 << BUZZER);
-    else PORTB &= ~(1 << BUZZER);
+    uint8_t rojo = (estado_actual == ALARMA_AUTO ||
+                    estado_actual == ALARMA_MANUAL ||
+                    estado_actual == SILENCIO_AUTO ||
+                    estado_actual == SILENCIO_MANUAL);
+
+    uint8_t buzzer = (estado_actual == ALARMA_AUTO ||
+                      estado_actual == ALARMA_MANUAL);
+
+    if (verde)
+        PORTB |= (1 << LED_VERDE);
+    else
+        PORTB &= ~(1 << LED_VERDE);
+
+    if (rojo)
+        PORTB |= (1 << LED_ROJO);
+    else
+        PORTB &= ~(1 << LED_ROJO);
+
+    if (buzzer)
+        PORTB |= (1 << BUZZER);
+    else
+        PORTB &= ~(1 << BUZZER);
 }
 
+
 static void estado(void) {
-    char texto[22];
-    uart_texto(armado ? "ARMADA;" : "DESARMADA;");
-    uart_texto(automatico ? "MODO:AUTO;" : "MODO:MANUAL;");
-    uart_texto(alarma ? "ALARMA:ON;" : "ALARMA:OFF;");
-    uart_texto(silencio ? "SIRENA:SILENCIO;" : "SIRENA:NORMAL;");
-    snprintf(texto, sizeof(texto), "LDR:%u\r\n", leer_ldr());
+    char texto[24];
+
+    uart_texto("ESTADO:");
+
+    switch (estado_actual) {
+        case DESARMADO:
+            uart_texto("DESARMADO;");
+            break;
+
+        case ARMADO_AUTO:
+            uart_texto("ARMADO_AUTO;");
+            break;
+
+        case ARMADO_MANUAL:
+            uart_texto("ARMADO_MANUAL;");
+            break;
+
+        case ALARMA_AUTO:
+            uart_texto("ALARMA_AUTO;");
+            break;
+
+        case ALARMA_MANUAL:
+            uart_texto("ALARMA_MANUAL;");
+            break;
+
+        case SILENCIO_AUTO:
+            uart_texto("SILENCIO_AUTO;");
+            break;
+
+        case SILENCIO_MANUAL:
+            uart_texto("SILENCIO_MANUAL;");
+            break;
+    }
+
+    uart_texto(modo_seleccionado ?
+               "MODO:AUTO;" : "MODO:MANUAL;");
+
+    snprintf(texto, sizeof(texto),
+         "LDR:%u;PIR:%u\r\n",
+         leer_ldr(),
+         (unsigned int)((PIND & (1 << PIR)) != 0));
+
     uart_texto(texto);
 }
 
 static void procesar(const char *c) {
+
+    uart_texto("RECIBIDO:[");
+    uart_texto(c);
+    uart_texto("]\r\n");
+
     if (!strcmp(c, "ARMAR")) {
-        armado = 1;
-        alarma = 0;
-        silencio = 0;
-        uart_texto("OK:ARMADA\r\n");
+
+        if (estado_actual == DESARMADO) {
+            estado_actual = modo_seleccionado ?
+                            ARMADO_AUTO : ARMADO_MANUAL;
+            uart_texto("OK:ARMADA\r\n");
+        } else {
+            uart_texto("ERROR:YA_ARMADA\r\n");
+        }
+
     } else if (!strcmp(c, "DESARMAR")) {
-        armado = 0;
-        alarma = 0;
-        silencio = 0;
+
+        estado_actual = DESARMADO;
         uart_texto("OK:DESARMADA\r\n");
+
+    
     } else if (!strcmp(c, "AUTO")) {
-        automatico = 1;
-        uart_texto("OK:MODO_AUTO\r\n");
+
+        if (estado_actual == DESARMADO ||
+            estado_actual == ARMADO_AUTO ||
+            estado_actual == ARMADO_MANUAL) {
+
+            modo_seleccionado = 1;
+
+            if (estado_actual == ARMADO_MANUAL) {
+                estado_actual = ARMADO_AUTO;
+            }
+
+            uart_texto("OK:MODO_AUTO\r\n");
+
+        } else {
+            uart_texto("ERROR:NO_CAMBIAR_MODO_EN_ALARMA\r\n");
+        }
+
     } else if (!strcmp(c, "MANUAL")) {
-        automatico = 0;
-        uart_texto("OK:MODO_MANUAL\r\n");
-    } else if (!strcmp(c, "SILENCIO")) {
-        silencio = 1;
-        uart_texto("OK:SIRENA_SILENCIADA\r\n");
+
+        if (estado_actual == DESARMADO ||
+            estado_actual == ARMADO_AUTO ||
+            estado_actual == ARMADO_MANUAL) {
+
+            modo_seleccionado = 0;
+
+            if (estado_actual == ARMADO_AUTO) {
+                estado_actual = ARMADO_MANUAL;
+            }
+
+            uart_texto("OK:MODO_MANUAL\r\n");
+
+        } else {
+            uart_texto("ERROR:NO_CAMBIAR_MODO_EN_ALARMA\r\n");
+        }
+
+
     } else if (!strcmp(c, "ALARMA")) {
-        if (armado && !automatico) {
-            alarma = 1;
-            silencio = 0;
+
+        if (estado_actual == ARMADO_MANUAL) {
+            estado_actual = ALARMA_MANUAL;
             uart_texto("ALARMA:ON;ZONA:MANUAL\r\n");
         } else {
-            uart_texto("ERROR:REQUIERE_MANUAL_Y_ARMADA\r\n");
+            uart_texto("ERROR:REQUIERE_MANUAL_ARMADA\r\n");
         }
+
+    } else if (!strcmp(c, "SILENCIO")) {
+
+        if (estado_actual == ALARMA_AUTO) {
+            estado_actual = SILENCIO_AUTO;
+            uart_texto("OK:SIRENA_SILENCIADA\r\n");
+
+        } else if (estado_actual == ALARMA_MANUAL) {
+            estado_actual = SILENCIO_MANUAL;
+            uart_texto("OK:SIRENA_SILENCIADA\r\n");
+
+        } else {
+            uart_texto("ERROR:NO_HAY_ALARMA_ACTIVA\r\n");
+        }
+
+    } else if (!strcmp(c, "RESTABLECER")) {
+
+        if (estado_actual == ALARMA_AUTO ||
+            estado_actual == SILENCIO_AUTO) {
+
+            uint8_t ventana = (leer_ldr() < UMBRAL_LDR);
+            uint8_t movimiento = ((PIND & (1 << PIR)) != 0);
+
+            if (!ventana && !movimiento) {
+                estado_actual = ARMADO_AUTO;
+                uart_texto("OK:ALARMA_RESTABLECIDA\r\n");
+            } else {
+                uart_texto("ERROR:INTRUSION_ACTIVA\r\n");
+            }
+
+        } else {
+            uart_texto("ERROR:NO_CORRESPONDE_RESTABLECER\r\n");
+        }
+
+    } else if (!strcmp(c, "APAGAR")) {
+
+        if (estado_actual == ALARMA_MANUAL ||
+            estado_actual == SILENCIO_MANUAL) {
+
+            estado_actual = ARMADO_MANUAL;
+            uart_texto("OK:ALARMA_MANUAL_APAGADA\r\n");
+
+        } else {
+            uart_texto("ERROR:NO_CORRESPONDE_APAGAR\r\n");
+        }
+
     } else if (!strcmp(c, "ESTADO")) {
+
         estado();
+
     } else if (*c) {
+
         uart_texto("ERROR:COMANDO_DESCONOCIDO\r\n");
     }
+
+    // Actualizar salidas Moore
     salidas();
+}
+
+static void recibir_caracter(
+    char c,
+    char *comando,
+    uint8_t *indice
+) {
+    if (c == '\r' || c == '\n') {
+
+        if (*indice > 0) {
+            comando[*indice] = '\0';
+            procesar(comando);
+            *indice = 0;
+        }
+
+    } else if (*indice < 19) {
+
+        if (c >= 'a' && c <= 'z') {
+            c -= 32;
+        }
+
+        comando[(*indice)++] = c;
+
+    } else {
+
+        *indice = 0;
+        uart_texto("ERROR:COMANDO_LARGO\r\n");
+    }
 }
 
 static void recibir(void) {
-    while (UCSR0A & (1 << RXC0)) {
-        char c = UDR0;
-        if (c == '\r' || c == '\n') {
-            if (indice) {
-                comando[indice] = '\0';
-                procesar(comando);
-                indice = 0;
-            }
-        } else if (indice < sizeof(comando) - 1) {
-            if (c >= 'a' && c <= 'z') c -= 32;
-            comando[indice++] = c;
-        } else {
-            indice = 0;
-            uart_texto("ERROR:COMANDO_LARGO\r\n");
-        }
+
+    static char comando_usb[20];
+    static char comando_bt[20];
+
+    static uint8_t indice_usb = 0;
+    static uint8_t indice_bt = 0;
+
+    // Comandos desde la computadora
+    while (Serial.available() > 0) {
+        recibir_caracter(
+            (char)Serial.read(),
+            comando_usb,
+            &indice_usb
+        );
+    }
+
+    // Comandos desde el celular
+    while (bluetooth.available() > 0) {
+        recibir_caracter(
+            (char)bluetooth.read(),
+            comando_bt,
+            &indice_bt
+        );
     }
 }
 
-int main(void) {
-    DDRB |= (1 << LED_VERDE) | (1 << LED_ROJO) | (1 << BUZZER);
+void setup() {
+
+    // Configurar LED verde, LED rojo y buzzer como salidas
+    DDRB |= (1 << LED_VERDE) |
+            (1 << LED_ROJO) |
+            (1 << BUZZER);
+
+    // Configurar PIR como entrada
     DDRD &= ~(1 << PIR);
     PORTD &= ~(1 << PIR);
+
+    // Inicializar UART y ADC
     uart_init();
     adc_init();
+    timer1_init();
+    sei();
+
+    // Estado inicial de la maquina Moore
+    estado_actual = DESARMADO;
     salidas();
+
     uart_texto("SISTEMA DE ALARMA LISTO\r\n");
-    uart_texto("COMANDOS: ARMAR DESARMAR AUTO MANUAL SILENCIO ALARMA ESTADO\r\n");
+    uart_texto("COMANDOS: ARMAR DESARMAR AUTO MANUAL ALARMA SILENCIO RESTABLECER APAGAR ESTADO\r\n");
 
-    uint8_t anterior = 0;
-    while (1) {
-        recibir();
-        uint8_t ventana = (leer_ldr() < UMBRAL_LDR);
-        uint8_t movimiento = (PIND & (1 << PIR)) != 0;
-        uint8_t intrusion = ventana || movimiento;
-
-        if (armado && automatico && intrusion && !alarma) {
-            alarma = 1;
-            silencio = 0;
-            if (ventana) uart_texto("ALARMA:ON;ZONA:VENTANA\r\n");
-            else uart_texto("ALARMA:ON;ZONA:MOVIMIENTO\r\n");
-        }
-        if (armado && automatico && intrusion && !anterior && alarma) {
-            uart_texto(ventana ? "EVENTO:VENTANA\r\n" : "EVENTO:MOVIMIENTO\r\n");
-        }
-        anterior = intrusion;
-        salidas();
-        _delay_ms(30);
-    }
 }
+
+// Variables del filtro PIR
+static uint32_t inicio_pir = 0;
+static uint8_t contando_pir = 0;
+static uint8_t pir_confirmado = 0;
+
+void loop() {
+
+        // Procesar comandos recibidos por Bluetooth
+        recibir();
+
+        // Leer sensores
+uint16_t valor_ldr = leer_ldr();
+
+uint8_t ventana = (valor_ldr < UMBRAL_LDR);
+
+// Lectura directa del PIR
+uint8_t pir_actual = ((PIND & (1 << PIR)) != 0);
+
+// Tiempo actual del sistema
+uint32_t ahora = millis_timer();
+
+// Filtro de 2 segundos para el PIR
+if ((estado_actual == ARMADO_AUTO ||
+     estado_actual == ALARMA_AUTO ||
+     estado_actual == SILENCIO_AUTO) && pir_actual) {
+    if (!contando_pir) {
+        inicio_pir = ahora;
+        contando_pir = 1;
+    }
+
+    if ((uint32_t)(ahora - inicio_pir) >= TIEMPO_PIR_MS) {
+        pir_confirmado = 1;
+    }
+
+} else {
+    contando_pir = 0;
+    pir_confirmado = 0;
+}
+
+// Movimiento confirmado
+uint8_t movimiento = pir_confirmado;
+
+// Intrusion por cualquiera de los sensores
+uint8_t intrusion = ventana || movimiento;
+
+        
+        // Transicion automatica de la maquina Moore
+        if (estado_actual == ARMADO_AUTO && intrusion) {
+
+            estado_actual = ALARMA_AUTO;
+
+            if (ventana) {
+                uart_texto("ALARMA:ON;ZONA:VENTANA\r\n");
+            } else {
+                uart_texto("ALARMA:ON;ZONA:MOVIMIENTO\r\n");
+            }
+
+
+        }
+
+
+        // Actualizar las salidas segun el estado Moore
+        salidas();
+
+        
+        // Sin retardo para recibir comandos UART a tiempo
+    }
+
