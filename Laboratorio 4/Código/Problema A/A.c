@@ -9,6 +9,9 @@
 #include <avr/interrupt.h>
 #include <util/delay.h>
 
+/* Cambiar a 1 para simulación en Proteus, 0 para la placa física */
+#define SIMULACION 0
+
 #define BAUD      9600
 #define MY_UBRR   (F_CPU/16/BAUD-1)
 
@@ -338,6 +341,27 @@ uint8_t rc522_anticoll(uint8_t *serNum)
 	return status;
 }
 
+#if SIMULACION
+#define LCD_ADDR     0x20
+#else
+#define LCD_ADDR     0x27
+#endif
+
+#define MAX_INTENTOS   3
+#define TIMEOUT        1500
+
+#define ST_ESPERA_TARJETA   0
+#define ST_PEDIR_PIN        1
+#define ST_MENU             2
+#define ST_CONSULTA         3
+#define ST_RETIRO           4
+#define ST_DEPOSITO         5
+#define ST_BLOQUEO          6
+
+#define IN_CANCEL   0
+#define IN_OK       1
+#define IN_TIMEOUT  2
+
 uint8_t rfid_leer_uid(uint8_t *uid)
 {
 	uint8_t status, str[16];
@@ -390,31 +414,504 @@ char teclado_leer(void) {
 	PORTC |= 0x0F;
 	return 0;
 }
+/* ================= FUNCIONES AUXILIARES Y EEPROM 16 BITS ================= */
+
+void uart_vaciar_rx(void)
+{
+	uint8_t basura;
+	while (UCSR0A & (1 << RXC0)) {
+		basura = UDR0;
+	}
+	(void)basura;
+}
+
+uint16_t EEPROM_read16(uint16_t direccion)
+{
+	uint16_t bajo = EEPROM_read(direccion);
+	uint16_t alto = EEPROM_read(direccion + 1);
+	return (alto << 8) | bajo;
+}
+
+uint8_t buscar_cuenta(uint8_t *uid)
+{
+	uint8_t i, j, iguales;
+	for (i = 0; i < N_CUENTAS; i++) {
+		iguales = 1;
+		for (j = 0; j < 4; j++) {
+			if (EEPROM_read(dir_cuenta(i) + OFS_UID + j) != uid[j]) {
+				iguales = 0;
+			}
+		}
+		if (iguales) {
+			return i;
+		}
+	}
+	return NO_ENCONTRADA;
+}
+
+/* ============================ UTILIDADES TEXTO ============================ */
+
+void num_a_texto(uint16_t valor, char *texto)
+{
+	char tmp[6];
+	uint8_t n = 0, i;
+
+	if (valor == 0) {
+		texto[0] = '0';
+		texto[1] = '\0';
+		return;
+	}
+	while (valor > 0) {
+		tmp[n++] = '0' + (valor % 10);
+		valor = valor / 10;
+	}
+	for (i = 0; i < n; i++) {
+		texto[i] = tmp[n - 1 - i];
+	}
+	texto[n] = '\0';
+}
+
+uint16_t texto_a_num(char *texto)
+{
+	uint32_t valor = 0;
+	uint8_t i = 0;
+
+	while (texto[i] != '\0') {
+		valor = valor * 10 + (texto[i] - '0');
+		if (valor > 65535UL) {
+			return 65535;
+		}
+		i++;
+	}
+	return (uint16_t)valor;
+}
+
+void uart_print_num(uint16_t valor)
+{
+	char t[6];
+	num_a_texto(valor, t);
+	uart_print(t);
+}
+
+void uart_print_uid(uint8_t *uid)
+{
+	const char *hex = "0123456789ABCDEF";
+	char t[9];
+	uint8_t i;
+
+	for (i = 0; i < 4; i++) {
+		t[2 * i]     = hex[uid[i] >> 4];
+		t[2 * i + 1] = hex[uid[i] & 0x0F];
+	}
+	t[8] = '\0';
+	uart_print(t);
+}
+
+/* ============================ CONTROL DE LEDS Y BUZZER ==================== */
+
+void delay_ms(uint16_t n)
+{
+	while (n--) {
+		_delay_ms(1);
+	}
+}
+
+void led_verde(uint16_t ms)
+{
+	PORTD |= (1 << LED_VERDE);
+	delay_ms(ms);
+	PORTD &= ~(1 << LED_VERDE);
+}
+
+void led_rojo(uint16_t ms)
+{
+	PORTD |= (1 << LED_ROJO);
+	delay_ms(ms);
+	PORTD &= ~(1 << LED_ROJO);
+}
+
+void beep(uint16_t ms)
+{
+	uint16_t i;
+	for (i = 0; i < ms; i++) {
+		PORTB |= (1 << BUZZER);
+		_delay_us(500);
+		PORTB &= ~(1 << BUZZER);
+		_delay_us(500);
+	}
+}
+
+/* ============================ LECTURA DE TECLADO ========================== */
+
+char teclado_tecla(void)
+{
+	char k = teclado_leer();
+	if (k == 0) {
+		return 0;
+	}
+	_delay_ms(20);
+	if (teclado_leer() != k) {
+		return 0;
+	}
+	while (teclado_leer() != 0);
+	_delay_ms(20);
+	return k;
+}
+
+char esperar_tecla(uint16_t ticks)
+{
+	char k;
+	while (ticks > 0) {
+		k = teclado_tecla();
+		if (k != 0) {
+			return k;
+		}
+		_delay_ms(10);
+		ticks--;
+	}
+	return 0;
+}
+
+uint8_t leer_entrada(char *buf, uint8_t max, uint8_t min, uint8_t oculto)
+{
+	uint8_t largo = 0, i;
+	char linea[17];
+	char k;
+
+	buf[0] = '\0';
+	lcd_linea(1, "");
+
+	while (1) {
+		k = esperar_tecla(TIMEOUT);
+
+		if (k == 0) {
+			return IN_TIMEOUT;
+		}
+
+		if (k >= '0' && k <= '9') {
+			if (largo < max) {
+				buf[largo] = k;
+				largo++;
+				buf[largo] = '\0';
+			}
+			} else if (k == '*') {
+			if (largo == 0) {
+				return IN_CANCEL;
+			}
+			largo--;
+			buf[largo] = '\0';
+			} else if (k == '#') {
+			if (largo >= min) {
+				return IN_OK;
+			}
+		}
+
+		for (i = 0; i < largo; i++) {
+			if (oculto) {
+				linea[i] = '*';
+				} else {
+				linea[i] = buf[i];
+			}
+		}
+		linea[largo] = '\0';
+		lcd_linea(1, linea);
+	}
+}
+
+void esperar_retiro_tarjeta(void)
+{
+	#if !SIMULACION
+	uint8_t uid[4];
+	while (rfid_leer_uid(uid)) {
+		_delay_ms(200);
+	}
+	#endif
+}
+
+void mostrar_saldo(uint8_t cuenta, char *titulo)
+{
+	char b[6];
+	num_a_texto(EEPROM_read16(dir_cuenta(cuenta) + OFS_SALDO), b);
+	lcd_linea(0, titulo);
+	lcd_linea(1, b);
+}
 
 int main(void)
 {
-uint8_t uid[4];
+	uint8_t  estado = ST_ESPERA_TARJETA;
+	uint8_t  nuevo = 1;
+	uint8_t  cuenta = 0;
+	uint8_t  intentos = 0;
+	uint8_t  uid[4];
+	uint8_t  r;
+	uint16_t monto, saldo;
+	char     k;
+	char     buf[8];
+	char     msg[] = "Intento X de 3";
 
-uart_init(MY_UBRR);
-TWI_init();
-lcd_init();
+	pines_init();
+	
+	/* Prueba inicial de LEDs */
+	PORTD |= (1 << LED_VERDE) | (1 << LED_ROJO);
+	_delay_ms(300);
+	PORTD &= ~((1 << LED_VERDE) | (1 << LED_ROJO));
 
-#if !SIMULACION
-spi_init();
-mfrc522_init();
-#endif
+	uart_init(MY_UBRR);
+	TWI_init();
+	lcd_init();
 
-lcd_linea(0, "Lector RFID OK");
-lcd_linea(1, "Acerque tarjeta");
+	if (EEPROM_read(EE_MARCA_DIR) != EE_MARCA_VAL) {
+		eeprom_precargar();
+	}
 
-   while (1) {
-	   if (rfid_leer_uid(uid)) {
-		   lcd_linea(0, "Tarjeta Detect!");
-		   uart_print("\r\n[RFID] Tarjeta detectada.");
-		   _delay_ms(1000);
-		   lcd_linea(0, "Lector RFID OK");
-	   }
-	   _delay_ms(100);
-   }
-   }
+	uart_print("\r\n==========================================");
+	uart_print("\r\n[ATM] Cuentas cargadas en EEPROM:");
+	for (uint8_t i = 0; i < N_CUENTAS; i++) {
+		uint8_t temp_uid[4];
+		for (uint8_t j = 0; j < 4; j++) {
+			temp_uid[j] = EEPROM_read(dir_cuenta(i) + OFS_UID + j);
+		}
+		uart_print("\r\n Cuenta ");
+		uart_print_num(i + 1);
+		uart_print(": UID = ");
+		uart_print_uid(temp_uid);
+	}
+	uart_print("\r\n==========================================");
+
+	#if !SIMULACION
+	spi_init();
+	mfrc522_init();
+	_delay_ms(100);
+	#endif
+
+	while (1) {
+
+		switch (estado) {
+
+			case ST_ESPERA_TARJETA:
+			if (nuevo) {
+				nuevo = 0;
+				lcd_linea(0, "    CAJERO ATM");
+				lcd_linea(1, "Acerque tarjeta");
+				esperar_retiro_tarjeta();
+				uart_vaciar_rx();
+				uart_print("\r\n[ATM] Esperando tarjeta...");
+			}
+			if (rfid_leer_uid(uid)) {
+				uart_print("\r\n[ATM] UID recibido: ");
+				uart_print_uid(uid);
+				cuenta = buscar_cuenta(uid);
+				if (cuenta == NO_ENCONTRADA) {
+					uart_print(" -> TARJETA NO REGISTRADA");
+					lcd_linea(0, "Tarjeta no");
+					lcd_linea(1, "registrada");
+					
+					beep(500);
+					led_rojo(2000);
+					
+					nuevo = 1;
+					} else {
+					uart_print(" -> RECONOCIDA (Cuenta ");
+					uart_print_num(cuenta + 1);
+					uart_print(")");
+
+					lcd_linea(0, "    TARJETA     ");
+					lcd_linea(1, "   ACEPTADA     ");
+					led_verde(1500);
+
+					intentos = 0;
+					estado = ST_PEDIR_PIN;
+					nuevo = 1;
+				}
+			}
+			_delay_ms(20);
+			break;
+
+			case ST_PEDIR_PIN:
+			if (nuevo) {
+				nuevo = 0;
+				lcd_linea(0, "Ingrese PIN:");
+			}
+			r = leer_entrada(buf, 4, 4, 1);
+			if (r == IN_OK) {
+				if (texto_a_num(buf) == EEPROM_read16(dir_cuenta(cuenta) + OFS_PIN)) {
+					uart_print("\r\n[ATM] PIN correcto");
+					lcd_linea(0, "PIN correcto");
+					lcd_linea(1, "");
+					led_verde(800);
+					estado = ST_MENU;
+					} else {
+					intentos++;
+					uart_print("\r\n[ATM] PIN incorrecto, intento ");
+					uart_print_num(intentos);
+					if (intentos >= MAX_INTENTOS) {
+						estado = ST_BLOQUEO;
+						} else {
+						msg[8] = '0' + intentos;
+						lcd_linea(0, "PIN incorrecto");
+						lcd_linea(1, msg);
+						led_rojo(1500);
+					}
+				}
+				} else {
+				if (r == IN_TIMEOUT) {
+					lcd_linea(0, "Tiempo agotado");
+					} else {
+					lcd_linea(0, "Operacion");
+				}
+				lcd_linea(1, "cancelada");
+				led_rojo(1000);
+				estado = ST_ESPERA_TARJETA;
+			}
+			nuevo = 1;
+			break;
+
+			case ST_MENU:
+			if (nuevo) {
+				nuevo = 0;
+				lcd_linea(0, "A:Saldo B:Retiro");
+				lcd_linea(1, "C:Deposito D:Sal");
+			}
+			k = esperar_tecla(TIMEOUT);
+			if (k == 'A') {
+				estado = ST_CONSULTA;
+				nuevo = 1;
+				} else if (k == 'B') {
+				estado = ST_RETIRO;
+				nuevo = 1;
+				} else if (k == 'C') {
+				estado = ST_DEPOSITO;
+				nuevo = 1;
+				} else if (k == 'D') {
+				lcd_linea(0, "Gracias por usar");
+				lcd_linea(1, "el cajero");
+				delay_ms(1500);
+				estado = ST_ESPERA_TARJETA;
+				nuevo = 1;
+				} else if (k == 0) {
+				lcd_linea(0, "Tiempo agotado");
+				lcd_linea(1, "cancelada");
+				delay_ms(1500);
+				estado = ST_ESPERA_TARJETA;
+				nuevo = 1;
+			}
+			break;
+
+			case ST_CONSULTA:
+			mostrar_saldo(cuenta, "Saldo actual:");
+			uart_print("\r\n[ATM] Consulta de saldo: ");
+			uart_print_num(EEPROM_read16(dir_cuenta(cuenta) + OFS_SALDO));
+			led_verde(500);
+			esperar_tecla(500);
+			estado = ST_MENU;
+			nuevo = 1;
+			break;
+
+			case ST_RETIRO:
+			lcd_linea(0, "Monto a retirar:");
+			r = leer_entrada(buf, 5, 1, 0);
+			if (r == IN_TIMEOUT) {
+				lcd_linea(0, "Tiempo agotado");
+				lcd_linea(1, "cancelada");
+				delay_ms(1000);
+				estado = ST_ESPERA_TARJETA;
+				nuevo = 1;
+				break;
+			}
+			if (r == IN_OK) {
+				monto = texto_a_num(buf);
+				saldo = EEPROM_read16(dir_cuenta(cuenta) + OFS_SALDO);
+				
+				if (monto == 0 || (monto % 500 != 0)) {
+					uart_print("\r\n[ATM] Retiro rechazado");
+					lcd_linea(0, "Monto no valido");
+					lcd_linea(1, "Solo mult de 500");
+					led_rojo(1500);
+					} else if (monto > saldo) {
+					uart_print("\r\n[ATM] Retiro rechazado: saldo insuficiente");
+					lcd_linea(0, "Saldo");
+					lcd_linea(1, "insuficiente");
+					led_rojo(1500);
+					} else {
+					saldo = saldo - monto;
+					EEPROM_update16(dir_cuenta(cuenta) + OFS_SALDO, saldo);
+					uart_print("\r\n[ATM] Retiro: ");
+					uart_print_num(monto);
+					uart_print(" | Saldo: ");
+					uart_print_num(saldo);
+					lcd_linea(0, "Retiro exitoso");
+					lcd_linea(1, "");
+					
+					beep(300);
+					led_verde(1000);
+					
+					mostrar_saldo(cuenta, "Nuevo saldo:");
+					delay_ms(2000);
+				}
+			}
+			estado = ST_MENU;
+			nuevo = 1;
+			break;
+
+			case ST_DEPOSITO:
+			lcd_linea(0, "Monto deposito:");
+			r = leer_entrada(buf, 5, 1, 0);
+			if (r == IN_TIMEOUT) {
+				lcd_linea(0, "Tiempo agotado");
+				lcd_linea(1, "cancelada");
+				delay_ms(1000);
+				estado = ST_ESPERA_TARJETA;
+				nuevo = 1;
+				break;
+			}
+			if (r == IN_OK) {
+				monto = texto_a_num(buf);
+				saldo = EEPROM_read16(dir_cuenta(cuenta) + OFS_SALDO);
+				
+				if (monto == 0 || (monto % 500 != 0)) {
+					uart_print("\r\n[ATM] Deposito rechazado: no es multiplo de 500");
+					lcd_linea(0, "Monto no valido");
+					lcd_linea(1, "Solo mult de 500");
+					led_rojo(1500);
+					} else if ((uint32_t)saldo + monto > 65535UL) {
+					uart_print("\r\n[ATM] Deposito rechazado: limite de saldo");
+					lcd_linea(0, "Limite de saldo");
+					lcd_linea(1, "excedido");
+					led_rojo(1500);
+					} else {
+					saldo = saldo + monto;
+					EEPROM_update16(dir_cuenta(cuenta) + OFS_SALDO, saldo);
+					uart_print("\r\n[ATM] Deposito: ");
+					uart_print_num(monto);
+					uart_print(" | Saldo: ");
+					uart_print_num(saldo);
+					lcd_linea(0, "Deposito exitoso");
+					lcd_linea(1, "");
+					led_verde(1000);
+					mostrar_saldo(cuenta, "Nuevo saldo:");
+					delay_ms(2000);
+				}
+			}
+			estado = ST_MENU;
+			nuevo = 1;
+			break;
+
+			case ST_BLOQUEO:
+			uart_print("\r\n[ATM] 3 intentos fallidos: acceso bloqueado");
+			lcd_linea(0, "Acceso bloqueado");
+			lcd_linea(1, "Retire tarjeta");
+			PORTD |= (1 << LED_ROJO);
+			beep(400);
+			delay_ms(200);
+			beep(400);
+			delay_ms(200);
+			beep(400);
+			delay_ms(1500);
+			PORTD &= ~(1 << LED_ROJO);
+			estado = ST_ESPERA_TARJETA;
+			nuevo = 1;
+			break;
+		}
+	}
+}
 
