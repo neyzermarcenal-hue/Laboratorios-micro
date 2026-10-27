@@ -42,6 +42,15 @@ typedef struct {
 	uint8_t b;
 } ColorRGB;
 
+uint8_t leds_grb[NUM_LEDS * 3];
+
+/* Paleta de colores para los elementos del juego */
+const ColorRGB COLOR_CURSOR   = {255, 255, 255}; /* Blanco brillante */
+const ColorRGB COLOR_OBJETIVO = {0, 255, 150};   /* Verde azulado */
+const ColorRGB COLOR_CORRECTO = {0, 255, 0};     /* Verde */
+const ColorRGB COLOR_ERROR    = {255, 0, 0};     /* Rojo */
+const ColorRGB COLOR_APAGADO  = {0, 0, 0};
+	
 /*UART*/
 
 void uart_init(uint16_t ubrr)
@@ -110,6 +119,63 @@ uint16_t eeprom_read_word(uint16_t addr)
 	uint8_t low = eeprom_read_byte(addr);
 	uint8_t high = eeprom_read_byte(addr + 1);
 	return (uint16_t)((high << 8) | low);
+}
+
+/* ============================ DRIVER WS2812B ============================== */
+
+void ws2812_init(void)
+{
+	DDRB |= (1 << WS2812_PIN);
+	PORTB &= ~(1 << WS2812_PIN);
+}
+
+void ws2812_render(void)
+{
+	uint8_t sreg = SREG;
+	cli();
+
+	uint16_t total_bytes = NUM_LEDS * 3;
+	uint8_t *ptr = leds_grb;
+
+	while (total_bytes--) {
+		uint8_t b = *ptr++;
+		for (uint8_t i = 0; i < 8; i++) {
+			if (b & 0x80) {
+				PORTB |= (1 << WS2812_PIN);
+				asm volatile("rjmp .+0\n\trjmp .+0\n\trjmp .+0\n\trjmp .+0\n\tnop\n\t");
+				PORTB &= ~(1 << WS2812_PIN);
+				asm volatile("rjmp .+0\n\tnop\n\t");
+				} else {
+				PORTB |= (1 << WS2812_PIN);
+				asm volatile("rjmp .+0\n\tnop\n\t");
+				PORTB &= ~(1 << WS2812_PIN);
+				asm volatile("rjmp .+0\n\trjmp .+0\n\trjmp .+0\n\trjmp .+0\n\tnop\n\t");
+			}
+			b <<= 1;
+		}
+	}
+
+	SREG = sreg;
+	_delay_us(60);
+}
+
+void ws2812_clear(void)
+{
+	for (uint16_t i = 0; i < NUM_LEDS * 3; i++) {
+		leds_grb[i] = 0;
+	}
+	ws2812_render();
+}
+
+void ws2812_set_pixel(uint8_t fila, uint8_t col, ColorRGB color)
+{
+	if (fila >= 8 || col >= 8) return;
+	
+	uint16_t idx = ((uint16_t)fila * 8 + col) * 3;
+	
+	leds_grb[idx]     = color.g;
+	leds_grb[idx + 1] = color.r;
+	leds_grb[idx + 2] = color.b;
 }
 
 /*  ADC (JOYSTICK)  */
