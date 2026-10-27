@@ -14,6 +14,13 @@
 #define START 0x01
 #define STOP  0x02
 #define VELOCIDAD 0x03
+#define PISTON 0x04
+
+// Umbrales de la LDR para detectar piezas.
+#define LDR_PIEZA 400
+#define LDR_LIBRE 550
+
+volatile uint16_t contador_piezas = 0;
 
 // Configurar SPI como maestro.
 void spi_master_init(void)
@@ -86,6 +93,8 @@ int main(void)
 {
 	uint8_t marcha = 0;
 	uint8_t velocidad;
+	uint8_t pieza_detectada = 0;
+	uint16_t luz;
 
 	// Configurar pulsador PD3 como entrada con pull-up.
 	DDRD &= ~(1 << PD3);
@@ -125,6 +134,25 @@ int main(void)
 
 			// Enviar velocidad al esclavo.
 			spi_send_command(VELOCIDAD, velocidad);
+
+			// Leer la LDR conectada al canal ADC0.
+			luz = adc_read(0);
+
+			// Detectar una nueva pieza.
+			if (!pieza_detectada && luz < LDR_PIEZA)
+			{
+				pieza_detectada = 1;
+				contador_piezas++;
+
+				// Enviar comando para accionar el piston.
+				spi_send_command(PISTON, 1);
+			}
+
+			// Esperar a que la pieza deje de tapar la LDR.
+			if (pieza_detectada && luz > LDR_LIBRE)
+			{
+				pieza_detectada = 0;
+			}
 		}
 
 		_delay_ms(75);

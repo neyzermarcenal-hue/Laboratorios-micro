@@ -3,6 +3,7 @@
 
 #include <avr/io.h>
 #include <stdint.h>
+#include <avr/interrupt.h>
 
 // Laboratorio 4 - Problema B: Esclavo SPI y PWM
 // SPI basado en los ejemplos de Yisus
@@ -13,6 +14,10 @@
 #define START 0x01
 #define STOP  0x02
 #define VELOCIDAD 0x03
+#define PISTON 0x04
+
+volatile uint8_t piston_activo = 0;
+volatile uint8_t piston_tiempo = 0;
 
 // Configurar SPI como esclavo.
 void spi_slave_init(void)
@@ -63,6 +68,53 @@ void motor_stop(void)
 	PORTB &= ~(1 << PB0);
 }
 
+// Inicializar PWM del servomotor SG90.
+void servo_init(void)
+{
+	// PB1 (OC1A) como salida.
+	DDRB |= (1 << PB1);
+
+	// Timer1 en Fast PWM, con TOP en ICR1.
+	TCCR1A = (1 << COM1A1) | (1 << WGM11);
+
+	// Prescaler de 8.
+	TCCR1B = (1 << WGM13) | (1 << WGM12) |
+	(1 << CS11);
+
+	// Periodo de 20 ms (50 Hz).
+	ICR1 = 39999;
+
+	// Posicion inicial del servo (pulso de 1 ms).
+	OCR1A = 2000;
+
+	// Timer2 en modo CTC.
+	TCCR2A = (1 << WGM21);
+
+	// Prescaler de 1024.
+	TCCR2B = (1 << CS22) | (1 << CS21) |
+	(1 << CS20);
+
+	// Interrupcion aproximadamente cada 10 ms.
+	OCR2A = 155;
+	TIMSK2 |= (1 << OCIE2A);
+}
+
+// Interrupcion para regresar el piston a reposo.
+ISR(TIMER2_COMPA_vect)
+{
+	if (piston_activo)
+	{
+		piston_tiempo++;
+
+		// 40 intervalos de 10 ms = 400 ms.
+		if (piston_tiempo >= 40)
+		{
+			OCR1A = 2000;
+			piston_activo = 0;
+		}
+	}
+}
+
 int main(void)
 {
 	uint8_t comando;
@@ -74,7 +126,11 @@ int main(void)
 	PORTD &= ~(1 << PD2);
 
 	motor_init();
+	servo_init();
 	spi_slave_init();
+
+	// Habilitar interrupciones.
+	sei();
 
 	while (1)
 	{
@@ -101,6 +157,13 @@ int main(void)
 			marcha = 0;
 			motor_stop();
 			PORTD &= ~(1 << PD2);
+
+			// Regresar el piston a reposo.
+			cli();
+			piston_activo = 0;
+			piston_tiempo = 0;
+			OCR1A = 2000;
+			sei();
 			break;
 
 			case VELOCIDAD:
@@ -109,6 +172,18 @@ int main(void)
 			OCR0B = valor;
 			else
 			OCR0B = 0;
+			break;
+
+			case PISTON:
+			if (marcha && valor == 1)
+			{
+				// Mover el servo durante 400 ms.
+				cli();
+				piston_tiempo = 0;
+				piston_activo = 1;
+				OCR1A = 4000;
+				sei();
+			}
 			break;
 
 			default:
