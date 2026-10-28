@@ -2,6 +2,7 @@
 #define F_CPU 16000000UL
 
 #include <avr/io.h>
+#include <avr/interrupt.h>
 #include <avr/eeprom.h>
 #include <util/delay.h>
 #include <stdint.h>
@@ -10,11 +11,12 @@
 
 #define MPU_DIR 0x68
 #define N_LEDS 64
-#define N_DATOS (N_LEDS * 15)
+#define N_DATOS (N_LEDS * 3)
 #define MATRIZ_SERPENTINA 0
+#define BRILLO_BURBUJA 80
 
 #define MARCA_CALIBRACION 0xE605
-#define BUZZER_ACTIVO_BAJO 1
+#define BUZZER_ACTIVO_BAJO 0
 
 static uint8_t trama[N_DATOS];
 
@@ -192,39 +194,81 @@ int16_t *gx, int16_t *gy)
 	return 1;
 }
 
-// Inicializacion de la matriz RGB por SPI
+// Inicializacion de la matriz RGB
 void matriz_init(void)
 {
-	DDRB |= (1 << PB3) | (1 << PB5) | (1 << PB2);
-	PORTB |= (1 << PB2);
-
-	SPCR = (1 << SPE) | (1 << MSTR);
+	DDRB |= (1 << PB3);
+	PORTB &= ~(1 << PB3);
 }
 
-// Codificacion de colores para WS2812B
+// Guardar colores en el buffer GRB
 void ws_canal(uint8_t led, uint8_t canal, uint8_t valor)
 {
-	uint16_t inicio = ((uint16_t)led * 3 + canal) * 5;
+	trama[(uint16_t)led * 3 + canal] = valor;
+}
 
-	for (uint8_t i = 0; i < 5; i++)
-	trama[inicio + i] = 0;
+// Enviar pulsos WS2812B utilizando el metodo del problema D
+void matriz_enviar(void)
+{
+	uint8_t estado_interrupciones = SREG;
 
-	for (uint8_t bit = 0; bit < 8; bit++)
+	cli();
+
+	uint16_t total_bytes = N_DATOS;
+	uint8_t *puntero = trama;
+
+	while (total_bytes--)
 	{
-		uint8_t patron = (valor & (0x80 >> bit))
-		? 0x1C : 0x10;
+		uint8_t valor = *puntero++;
 
-		for (uint8_t j = 0; j < 5; j++)
+		for (uint8_t bit = 0; bit < 8; bit++)
 		{
-			uint8_t posicion = bit * 5 + j;
-
-			if (patron & (1 << (4 - j)))
+			if (valor & 0x80)
 			{
-				trama[inicio + posicion / 8] |=
-				(1 << (7 - posicion % 8));
+				PORTB |= (1 << PB3);
+
+				asm volatile(
+				"rjmp .+0\n\t"
+				"rjmp .+0\n\t"
+				"rjmp .+0\n\t"
+				"rjmp .+0\n\t"
+				"nop\n\t"
+				);
+
+				PORTB &= ~(1 << PB3);
+
+				asm volatile(
+				"rjmp .+0\n\t"
+				"nop\n\t"
+				);
 			}
+			else
+			{
+				PORTB |= (1 << PB3);
+
+				asm volatile(
+				"rjmp .+0\n\t"
+				"nop\n\t"
+				);
+
+				PORTB &= ~(1 << PB3);
+
+				asm volatile(
+				"rjmp .+0\n\t"
+				"rjmp .+0\n\t"
+				"rjmp .+0\n\t"
+				"rjmp .+0\n\t"
+				"nop\n\t"
+				);
+			}
+
+			valor <<= 1;
 		}
 	}
+
+	SREG = estado_interrupciones;
+
+	_delay_us(60);
 }
 
 // Mostrar una burbuja en la matriz 8x8
@@ -249,34 +293,16 @@ uint8_t azul)
 		ws_canal(led, 2, activo ? azul : 0);
 	}
 
-	for (uint16_t i = 0; i < N_DATOS; i++)
-	{
-		SPDR = trama[i];
-
-		while (!(SPSR & (1 << SPIF)));
-	}
-
-	_delay_us(300);
+	matriz_enviar();
 }
 
 // Apagar la matriz durante el parpadeo
 void matriz_apagar(void)
 {
-	for (uint8_t led = 0; led < N_LEDS; led++)
-	{
-		ws_canal(led, 0, 0);
-		ws_canal(led, 1, 0);
-		ws_canal(led, 2, 0);
-	}
-
 	for (uint16_t i = 0; i < N_DATOS; i++)
-	{
-		SPDR = trama[i];
+	trama[i] = 0;
 
-		while (!(SPSR & (1 << SPIF)));
-	}
-
-	_delay_us(300);
+	matriz_enviar();
 }
 
 // Convertir inclinacion a posicion de 0 a 7
@@ -325,25 +351,25 @@ uint8_t *azul)
 
 		*rojo = 0;
 		*verde = 0;
-		*azul = 16;
+		*azul = BRILLO_BURBUJA;
 	}
 	else if (ar > 3.0f && ap > 3.0f &&
 	fabsf(ar - ap) <= 5.0f)
 	{
-		*rojo = 16;
-		*verde = 16;
+		*rojo = BRILLO_BURBUJA;
+		*verde = BRILLO_BURBUJA;
 		*azul = 0;
 	}
 	else if (ar >= ap)
 	{
-		*rojo = 16;
+		*rojo = BRILLO_BURBUJA;
 		*verde = 0;
 		*azul = 0;
 	}
 	else
 	{
 		*rojo = 0;
-		*verde = 16;
+		*verde = BRILLO_BURBUJA;
 		*azul = 0;
 	}
 }
@@ -453,7 +479,7 @@ int main(void)
 
 	uint8_t rojo = 0;
 	uint8_t verde = 0;
-	uint8_t azul = 16;
+	uint8_t azul = BRILLO_BURBUJA;
 
 	char mensaje[64];
 
@@ -487,7 +513,7 @@ int main(void)
 	matriz_init();
 
 	// Mostrar LED inicial
-	matriz_mostrar(3, 3, 0, 0, 16);
+	matriz_mostrar(3, 3, 0, 0, BRILLO_BURBUJA);
 
 	if (mpu_init())
 	uart_texto("MPU6050 inicializado\r\n");
