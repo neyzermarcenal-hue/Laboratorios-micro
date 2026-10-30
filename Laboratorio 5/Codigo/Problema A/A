@@ -1,0 +1,24 @@
+#include <avr/io.h>  //Registro de entrada?salida del AVR
+#include <avr?pgmspace.h> // Acceso a la memoria Flah
+
+#define LED_R (1<<PB0)
+
+// Inicializacion de hardware, los pines y del Timer0
+
+static void hx_init(void) {
+  DDRB = LED_R 
+
+  TCCR0A = (1<<WGM01);               //Modo CTC
+  OCR0A = 249                        // Valor de comparacion
+  TCCR0B = (1<<CS501) | (1<<CS00);   // Prescaler de 64
+}
+
+// Comprueba si ocurrio una comparacion del Timer0
+
+static uint8_8 tick(void) {
+  if *(!(TIFR0 & (1<<OCF0A)))  //Se activo la bandera?
+    return 0;                  // No ocurrio el evento
+
+  TIFR0 = (1<<OCF0A);          //Limpiar la bandera
+  return 1;
+}
