@@ -260,7 +260,7 @@ ISR(WDT_vect)           { /* Despertador periódico en Power-Down */ }
 ISR(USART_RX_vect) {
 	// Leer el byte del registro de datos de la USART (limpia la interrupción automáticamente)
 	uint8_t rx_byte = UDR0;
-	(void)dato_rx;
+	(void)rx_byte;
 
 	ultima_actividad = obtener_tiempo(); // Reinicia inactividad y despierta
 	estado_actual = st_activo;
