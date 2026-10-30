@@ -1,0 +1,427 @@
+
+#define F_CPU 16000000UL
+
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <util/atomic.h>
+#include <stdint.h>
+#include <stdbool.h>
+
+// =====================================
+// 1. DEFINICION DE PINES
+// =====================================
+
+#define LED       PB0
+#define BUZZER    PB1
+#define BOTON     PD2     // INT0
+#define CANAL_ADC 0       // PC0 / ADC0
+
+// =====================================
+// 2. TIEMPOS DEL SISTEMA
+// =====================================
+
+#define TIEMPO_LED_MS       200UL
+#define TIEMPO_LCD_MS       500UL
+#define TIEMPO_TEMP_MS     2000UL
+#define TIEMPO_BUZZER_MS    300UL
+
+#define TIEMPO_STANDBY_MS 10000UL
+#define TIEMPO_APAGADO_MS 30000UL
+#define REBOTE_BOTON_MS      50UL
+
+// =====================================
+// 3. ESTADOS DE LA FSM
+// =====================================
+
+typedef enum
+{
+	ACTIVO,
+	STANDBY,
+	APAGADO,
+	EMERGENCIA
+} EstadoSistema;
+
+static EstadoSistema estado = ACTIVO;
+
+// =====================================
+// 4. VARIABLES COMPARTIDAS CON ISR
+// =====================================
+
+volatile uint32_t tiempo_ms = 0;
+volatile uint8_t solicitar_adc = 0;
+volatile uint8_t evento_boton = 0;
+
+// =====================================
+// 5. VARIABLES DEL PROGRAMA PRINCIPAL
+// =====================================
+
+static uint16_t valor_adc = 0;
+
+static uint32_t ultimo_led = 0;
+static uint32_t ultima_lcd = 0;
+static uint32_t ultima_temp = 0;
+static uint32_t ultima_actividad = 0;
+static uint32_t ultimo_boton = 0;
+static uint32_t inicio_buzzer = 0;
+
+static bool buzzer_activo = false;
+static bool primer_boton = true;
+
+// =====================================
+// 6. INTERRUPCION TIMER0 - 1 ms
+// =====================================
+
+ISR(TIMER0_COMPA_vect)
+{
+	tiempo_ms++;
+}
+
+// =====================================
+// 7. INTERRUPCION TIMER1 - 100 ms
+// =====================================
+
+ISR(TIMER1_COMPA_vect)
+{
+	solicitar_adc = 1;
+}
+
+// =====================================
+// 8. INTERRUPCION EXTERNA INT0
+// =====================================
+
+ISR(INT0_vect)
+{
+	evento_boton = 1;
+}
+
+// =====================================
+// 9. LECTURA SEGURA DEL TIEMPO
+// =====================================
+
+static uint32_t obtener_tiempo(void)
+{
+	uint32_t copia;
+
+	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
+	{
+		copia = tiempo_ms;
+	}
+
+	return copia;
+}
+
+// =====================================
+// 10. CONFIGURACION TIMER0
+// =====================================
+
+static void configurar_timer0(void)
+{
+	TCCR0A = (1 << WGM01);
+	TCCR0B = 0;
+
+	TCNT0 = 0;
+	OCR0A = 249;
+
+	TIFR0 = (1 << OCF0A);
+	TIMSK0 = (1 << OCIE0A);
+
+	TCCR0B = (1 << CS01) | (1 << CS00);
+}
+
+// =====================================
+// 11. CONFIGURACION TIMER1
+// =====================================
+
+static void configurar_timer1(void)
+{
+	TCCR1A = 0;
+	TCCR1B = 0;
+
+	TCNT1 = 0;
+	OCR1A = 24999;
+
+	TIFR1 = (1 << OCF1A);
+	TIMSK1 = (1 << OCIE1A);
+
+	TCCR1B = (1 << WGM12)
+	| (1 << CS11)
+	| (1 << CS10);
+}
+
+// =====================================
+// 12. CONFIGURACION ADC
+// =====================================
+
+static void configurar_adc(void)
+{
+	ADMUX = (1 << REFS0) | CANAL_ADC;
+
+	ADCSRA = (1 << ADEN)
+	| (1 << ADPS2)
+	| (1 << ADPS1)
+	| (1 << ADPS0);
+
+	ADCSRB = 0;
+	DIDR0 |= (1 << ADC0D);
+}
+
+// =====================================
+// 13. CONFIGURACION DEL PULSADOR
+// =====================================
+
+static void configurar_int0(void)
+{
+	DDRD &= ~(1 << BOTON);
+	PORTD |= (1 << BOTON);
+
+	EICRA = (1 << ISC01); // Flanco descendente
+	EIFR = (1 << INTF0);
+	EIMSK = (1 << INT0);
+}
+
+// =====================================
+// 14. INICIALIZACION GENERAL
+// =====================================
+
+static void inicializar_hardware(void)
+{
+	cli();
+
+	DDRB |= (1 << LED) | (1 << BUZZER);
+
+	PORTB &= ~((1 << LED) | (1 << BUZZER));
+
+	configurar_timer0();
+	configurar_timer1();
+	configurar_adc();
+	configurar_int0();
+
+	sei();
+}
+
+// =====================================
+// 15. TAREA DEL LED
+// =====================================
+
+static void tarea_led(uint32_t ahora)
+{
+	if ((uint32_t)(ahora - ultimo_led)
+	>= TIEMPO_LED_MS)
+	{
+		ultimo_led = ahora;
+		PORTB ^= (1 << LED);
+	}
+}
+
+// =====================================
+// 16. TAREA DEL ADC
+// =====================================
+
+static void tarea_adc(void)
+{
+	if (solicitar_adc == 0)
+	return;
+
+	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
+	{
+		solicitar_adc = 0;
+	}
+
+	// Iniciar conversion si no hay otra en curso
+	if (!(ADCSRA & (1 << ADSC)))
+	{
+		ADCSRA |= (1 << ADSC);
+	}
+}
+
+static void comprobar_adc(void)
+{
+	if (ADCSRA & (1 << ADSC))
+	return;
+
+	// ADIF indica conversion terminada
+	if (ADCSRA & (1 << ADIF))
+	{
+		valor_adc = ADC;
+		ADCSRA |= (1 << ADIF);
+	}
+}
+
+// =====================================
+// 17. CONTROL DEL BUZZER
+// =====================================
+
+static void activar_buzzer(uint32_t ahora)
+{
+	PORTB |= (1 << BUZZER);
+	buzzer_activo = true;
+	inicio_buzzer = ahora;
+}
+
+static void tarea_buzzer(uint32_t ahora)
+{
+	if (buzzer_activo &&
+	(uint32_t)(ahora - inicio_buzzer)
+	>= TIEMPO_BUZZER_MS)
+	{
+		PORTB &= ~(1 << BUZZER);
+		buzzer_activo = false;
+	}
+}
+
+// =====================================
+// 18. ATENCION DEL PULSADOR
+// =====================================
+
+static void atender_boton(uint32_t ahora)
+{
+	uint8_t pendiente;
+
+	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
+	{
+		pendiente = evento_boton;
+		evento_boton = 0;
+	}
+
+	if (!pendiente)
+	return;
+
+	// Antirrebote por tiempo
+	if (!primer_boton &&
+	(uint32_t)(ahora - ultimo_boton)
+	< REBOTE_BOTON_MS)
+	{
+		return;
+	}
+
+	primer_boton = false;
+	ultimo_boton = ahora;
+	ultima_actividad = ahora;
+
+	if (estado == STANDBY ||
+	estado == APAGADO)
+	{
+		estado = ACTIVO;
+	}
+
+	if (estado != EMERGENCIA)
+	{
+		activar_buzzer(ahora);
+	}
+}
+
+// =====================================
+// 19. MAQUINA DE ESTADOS
+// =====================================
+
+static void actualizar_fsm(uint32_t ahora)
+{
+	uint32_t inactividad =
+	(uint32_t)(ahora - ultima_actividad);
+
+	if (estado == ACTIVO)
+	{
+		if (inactividad >= TIEMPO_STANDBY_MS)
+		{
+			estado = STANDBY;
+		}
+	}
+	else if (estado == STANDBY)
+	{
+		if (inactividad >= TIEMPO_APAGADO_MS)
+		{
+			estado = APAGADO;
+		}
+	}
+	else if (estado == APAGADO)
+	{
+		// Esperar un evento de despertar
+	}
+	else if (estado == EMERGENCIA)
+	{
+		// Estado seguro:
+		PORTB &= ~((1 << LED) | (1 << BUZZER));
+		buzzer_activo = false;
+	}
+}
+
+// =====================================
+// 20. TAREA LCD - PENDIENTE DE DRIVER
+// =====================================
+
+static void tarea_lcd(uint32_t ahora)
+{
+	if ((uint32_t)(ahora - ultima_lcd)
+	< TIEMPO_LCD_MS)
+	return;
+
+	ultima_lcd = ahora;
+
+	// Integrar controlador LCD real.
+	//
+	// ACTIVO: mostrar estado y valor_adc
+	// STANDBY: mostrar "Esperando..."
+	// APAGADO: apagar retroiluminacion
+	// EMERGENCIA: mostrar alarma
+}
+
+// =====================================
+// 21. SENSOR DIGITAL - PENDIENTE
+// =====================================
+
+static void tarea_temperatura(uint32_t ahora)
+{
+	if ((uint32_t)(ahora - ultima_temp)
+	< TIEMPO_TEMP_MS)
+	return;
+
+	ultima_temp = ahora;
+
+	// Integrar lectura del sensor digital.
+	// Debe respetar los tiempos del modelo
+	// y no bloquear las demas tareas.
+}
+
+// =====================================
+// 22. PROGRAMA PRINCIPAL
+// =====================================
+
+int main(void)
+{
+	inicializar_hardware();
+
+	uint32_t ahora = obtener_tiempo();
+
+	ultimo_led = ahora;
+	ultima_lcd = ahora;
+	ultima_temp = ahora;
+	ultima_actividad = ahora;
+
+	while (1)
+	{
+		ahora = obtener_tiempo();
+
+		atender_boton(ahora);
+		actualizar_fsm(ahora);
+		tarea_buzzer(ahora);
+
+		if (estado == ACTIVO)
+		{
+			tarea_led(ahora);
+			tarea_adc();
+			comprobar_adc();
+			tarea_lcd(ahora);
+			tarea_temperatura(ahora);
+		}
+		else if (estado == STANDBY)
+		{
+			tarea_lcd(ahora);
+		}
+		else if (estado == APAGADO)
+		{
+			PORTB &= ~(1 << LED);
+		}
+	}
+}
+
+
