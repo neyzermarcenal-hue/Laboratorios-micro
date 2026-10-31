@@ -14,6 +14,7 @@
 #define LED       PB0
 #define BUZZER    PB1
 #define BOTON     PD2     // INT0
+#define BOTON_EMERGENCIA PD3  // INT1
 #define CANAL_ADC 0       // PC0 / ADC0
 #define DHT11_PIN PD4
 
@@ -63,6 +64,7 @@ static EstadoSistema estado = ACTIVO;
 volatile uint32_t tiempo_ms = 0;
 volatile uint8_t solicitar_adc = 0;
 volatile uint8_t evento_boton = 0;
+volatile uint8_t evento_emergencia = 0;
 
 // =====================================
 // 5. VARIABLES DEL PROGRAMA PRINCIPAL
@@ -131,6 +133,11 @@ ISR(TIMER1_COMPA_vect)
 ISR(INT0_vect)
 {
 	evento_boton = 1;
+}
+// Interrupcion del boton de emergencia
+ISR(INT1_vect)
+{
+    evento_emergencia = 1;
 }
 
 // =====================================
@@ -471,19 +478,32 @@ ISR(PCINT2_vect)
 // 14. INICIALIZACION GENERAL
 // =====================================
 
+
+static void configurar_int1(void)
+{
+    DDRD &= ~(1 << BOTON_EMERGENCIA);
+    PORTD |= (1 << BOTON_EMERGENCIA);
+
+    EICRA |= (1 << ISC11);
+    EICRA &= ~(1 << ISC10);
+
+    EIFR = (1 << INTF1);
+    EIMSK |= (1 << INT1);
+}
+
 static void inicializar_hardware(void)
 {
     cli();
 
     DDRB |= (1 << LED) | (1 << BUZZER);
-
     PORTB &= ~((1 << LED) | (1 << BUZZER));
 
     configurar_timer0();
-	configurar_timer1();
-	configurar_adc();
-	configurar_int0();
-	configurar_dht11();
+    configurar_timer1();
+    configurar_adc();
+    configurar_int0();
+    configurar_int1();
+    configurar_dht11();
 
     i2c_init();
 
@@ -491,6 +511,7 @@ static void inicializar_hardware(void)
 
     lcd_init();
 }
+
 
 // =====================================
 // 15. TAREA DEL LED
@@ -604,6 +625,29 @@ static void atender_boton(uint32_t ahora)
 	}
 }
 
+
+static void atender_emergencia(void)
+{
+    uint8_t pendiente;
+
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
+    {
+        pendiente = evento_emergencia;
+        evento_emergencia = 0;
+    }
+
+    if (pendiente)
+    {
+        estado = EMERGENCIA;
+
+        PORTB &= ~((1 << LED) | (1 << BUZZER));
+        buzzer_activo = false;
+
+        lcd_retroiluminacion(1);
+    }
+}
+
+
 // =====================================
 // 19. MAQUINA DE ESTADOS
 // =====================================
@@ -646,6 +690,10 @@ static void actualizar_fsm(uint32_t ahora)
 
 static void tarea_lcd(uint32_t ahora)
 {
+    // No actualizar la LCD durante la comunicacion DHT11
+    if (estado_dht != DHT_REPOSO)
+        return;
+
     if ((uint32_t)(ahora - ultima_lcd)
         < TIEMPO_LCD_MS)
         return;
@@ -654,25 +702,36 @@ static void tarea_lcd(uint32_t ahora)
 
     lcd_posicion(0, 0);
 
-   if (estado == ACTIVO)
+ 
+if (estado == ACTIVO)
 {
     lcd_texto("ESTADO: ACTIVO  ");
 
     lcd_posicion(1, 0);
+	lcd_texto("                ");
+	lcd_posicion(1, 0);
 
+    // Mostrar temperatura y humedad
     if (dht_valido)
     {
         lcd_texto("T:");
         lcd_numero(temperatura);
-        lcd_texto("C H:");
+
+        lcd_texto(" H:");
         lcd_numero(humedad);
-        lcd_texto("%     ");
+
+        lcd_texto(" A:");
     }
     else
     {
-        lcd_texto("DHT11: SIN DATO ");
+        lcd_texto("SIN DATO A:");
     }
+
+    // Mostrar valor del ADC
+    lcd_numero(valor_adc);
+
 }
+
     else if (estado == STANDBY)
     {
         lcd_texto("ESTADO: STANDBY ");
@@ -737,13 +796,15 @@ static void tarea_temperatura(uint32_t ahora)
             for (uint8_t i = 0; i < 5; i++)
                 dht_datos[i] = 0;
 
-            // Liberar linea: entrada con pull-up
-            PORTD |= (1 << DHT11_PIN);
-            DDRD &= ~(1 << DHT11_PIN);
+            // Liberar la linea de datos
+			// El modulo DHT11 tiene resistencia pull-up
+			PORTD |= (1 << DHT11_PIN);
+			DDRD &= ~(1 << DHT11_PIN);
 
-            TCNT2 = 0;
-            PCIFR = (1 << PCIF2);
-            PCICR |= (1 << PCIE2);
+			// Preparar recepcion por interrupciones
+			TCNT2 = 0;
+			PCIFR = (1 << PCIF2);
+			PCICR |= (1 << PCIE2);
         }
 
         dht_inicio_ms = ahora;
@@ -815,27 +876,31 @@ int main(void)
     ultima_temp = ahora;
     ultima_actividad = ahora;
 
-    while (1)
+    
+while (1)
+{
+    ahora = obtener_tiempo();
+
+    atender_boton(ahora);
+	atender_emergencia();
+	actualizar_fsm(ahora);
+	tarea_buzzer(ahora);
+
+    if (estado == ACTIVO)
     {
-        ahora = obtener_tiempo();
-
-        atender_boton(ahora);
-        actualizar_fsm(ahora);
-        tarea_buzzer(ahora);
-        tarea_lcd(ahora);
-
-        if (estado == ACTIVO)
-        {
-            tarea_led(ahora);
-            tarea_adc();
-            comprobar_adc();
-            tarea_temperatura(ahora);
-        }
-        else if (estado == APAGADO)
-        {
-            PORTB &= ~(1 << LED);
-        }
+        tarea_led(ahora);
+        tarea_adc();
+        comprobar_adc();
+        tarea_temperatura(ahora);
     }
+    else if (estado == APAGADO)
+    {
+        PORTB &= ~(1 << LED);
+    }
+
+    // Actualizar la pantalla al final
+    tarea_lcd(ahora);
+}
 
     return 0;
 }
