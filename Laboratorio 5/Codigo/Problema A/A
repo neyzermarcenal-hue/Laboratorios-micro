@@ -1,4 +1,3 @@
-
 #define F_CPU 16000000UL
 
 #include <avr/io.h>
@@ -6,6 +5,7 @@
 #include <util/atomic.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <util/delay.h>
 
 // =====================================
 // 1. DEFINICION DE PINES
@@ -15,6 +15,19 @@
 #define BUZZER    PB1
 #define BOTON     PD2     // INT0
 #define CANAL_ADC 0       // PC0 / ADC0
+#define DHT11_PIN PD4
+
+// LCD I2C con PCF8574
+#define LCD_DIRECCION 0x27
+
+#define LCD_RS 0x01
+#define LCD_EN 0x04
+#define LCD_LUZ 0x08
+
+#define LCD_D4 0x10
+#define LCD_D5 0x20
+#define LCD_D6 0x40
+#define LCD_D7 0x80
 
 // =====================================
 // 2. TIEMPOS DEL SISTEMA
@@ -66,6 +79,32 @@ static uint32_t inicio_buzzer = 0;
 
 static bool buzzer_activo = false;
 static bool primer_boton = true;
+
+// =====================================
+// VARIABLES DEL DHT11
+// =====================================
+
+typedef enum
+{
+    DHT_REPOSO,
+    DHT_INICIO,
+    DHT_RESPUESTA,
+    DHT_RECEPCION
+} EstadoDHT;
+
+static EstadoDHT estado_dht = DHT_REPOSO;
+
+volatile uint8_t dht_datos[5] = {0};
+volatile uint8_t dht_bits = 0;
+volatile uint8_t dht_fase = 0;
+volatile uint8_t dht_listo = 0;
+volatile uint8_t dht_error = 0;
+volatile uint8_t dht_ultimo_flanco = 0;
+
+static uint8_t temperatura = 0;
+static uint8_t humedad = 0;
+static bool dht_valido = false;
+static uint32_t dht_inicio_ms = 0;
 
 // =====================================
 // 6. INTERRUPCION TIMER0 - 1 ms
@@ -179,24 +218,278 @@ static void configurar_int0(void)
 	EIMSK = (1 << INT0);
 }
 
+
+// =====================================
+// FUNCIONES I2C Y LCD 16x2
+// =====================================
+
+static uint8_t lcd_luz = LCD_LUZ;
+
+// I2C a aproximadamente 100 kHz
+static void i2c_init(void)
+{
+    TWSR = 0;
+    TWBR = 72;
+    TWCR = (1 << TWEN);
+}
+
+// Devuelve 1 si el estado I2C es correcto
+static uint8_t i2c_esperar(void)
+{
+    uint16_t intentos = 60000;
+
+    while (!(TWCR & (1 << TWINT)))
+    {
+        if (--intentos == 0)
+            return 0;
+    }
+
+    return 1;
+}
+
+static uint8_t i2c_escribir(uint8_t dato)
+{
+    TWCR = (1 << TWINT) | (1 << TWSTA)
+         | (1 << TWEN);
+
+    if (!i2c_esperar())
+        return 0;
+
+    if ((TWSR & 0xF8) != 0x08 &&
+        (TWSR & 0xF8) != 0x10)
+        return 0;
+
+    TWDR = LCD_DIRECCION << 1;
+
+    TWCR = (1 << TWINT) | (1 << TWEN);
+
+    if (!i2c_esperar())
+        return 0;
+
+    if ((TWSR & 0xF8) != 0x18)
+        return 0;
+
+    TWDR = dato;
+
+    TWCR = (1 << TWINT) | (1 << TWEN);
+
+    if (!i2c_esperar())
+        return 0;
+
+    uint8_t correcto = ((TWSR & 0xF8) == 0x28);
+
+    TWCR = (1 << TWINT) | (1 << TWEN)
+         | (1 << TWSTO);
+
+    return correcto;
+}
+
+static void lcd_pulso(uint8_t dato)
+{
+    i2c_escribir(dato | LCD_EN);
+    _delay_us(1);
+    i2c_escribir(dato & ~LCD_EN);
+    _delay_us(50);
+}
+
+static void lcd_nibble(uint8_t nibble, uint8_t rs)
+{
+    uint8_t dato = (nibble & 0xF0) | lcd_luz;
+
+    if (rs)
+        dato |= LCD_RS;
+
+    lcd_pulso(dato);
+}
+
+static void lcd_enviar(uint8_t valor, uint8_t rs)
+{
+    lcd_nibble(valor & 0xF0, rs);
+    lcd_nibble((valor << 4) & 0xF0, rs);
+}
+
+static void lcd_comando(uint8_t comando)
+{
+    lcd_enviar(comando, 0);
+
+    if (comando == 0x01 || comando == 0x02)
+        _delay_ms(2);
+}
+
+static void lcd_caracter(char caracter)
+{
+    lcd_enviar((uint8_t)caracter, 1);
+}
+
+static void lcd_texto(const char *texto)
+{
+    while (*texto)
+    {
+        lcd_caracter(*texto++);
+    }
+}
+
+static void lcd_posicion(uint8_t fila, uint8_t columna)
+{
+    uint8_t direccion = (fila == 0) ? 0x00 : 0x40;
+    lcd_comando(0x80 | (direccion + columna));
+}
+
+static void lcd_numero(uint16_t numero)
+{
+    char texto[6];
+    uint8_t i = 0;
+
+    do
+    {
+        texto[i++] = '0' + (numero % 10);
+        numero /= 10;
+    }
+    while (numero > 0);
+
+    while (i > 0)
+        lcd_caracter(texto[--i]);
+}
+
+static void lcd_init(void)
+{
+    _delay_ms(50);
+
+    lcd_nibble(0x30, 0);
+    _delay_ms(5);
+
+    lcd_nibble(0x30, 0);
+    _delay_us(150);
+
+    lcd_nibble(0x30, 0);
+    lcd_nibble(0x20, 0);
+
+    lcd_comando(0x28); // 4 bits, 2 lineas
+    lcd_comando(0x0C); // Pantalla encendida
+    lcd_comando(0x06); // Cursor avanza
+    lcd_comando(0x01); // Limpiar pantalla
+}
+
+static void lcd_retroiluminacion(uint8_t encendida)
+{
+    lcd_luz = encendida ? LCD_LUZ : 0;
+    i2c_escribir(lcd_luz);
+}
+
+#define DHT_ESPERANDO_BAJADA  0
+#define DHT_ESPERANDO_SUBIDA  1
+#define DHT_FIN_RESPUESTA     2
+#define DHT_INICIO_BIT       3
+#define DHT_FIN_BIT          4
+
+static void configurar_dht11(void)
+{
+    // Timer2: 16 MHz / 8 = 2 MHz
+    // Cada cuenta equivale a 0,5 us.
+    TCCR2A = 0;
+    TCCR2B = (1 << CS21);
+    TCNT2 = 0;
+
+    // PD4 como entrada con pull-up
+    DDRD &= ~(1 << DHT11_PIN);
+    PORTD |= (1 << DHT11_PIN);
+
+    // PCINT20 pertenece al grupo PCINT2
+    PCMSK2 |= (1 << PCINT20);
+    PCICR &= ~(1 << PCIE2);
+    PCIFR = (1 << PCIF2);
+}
+
+static void dht_finalizar(uint8_t error)
+{
+    PCICR &= ~(1 << PCIE2);
+
+    if (error)
+        dht_error = 1;
+    else
+        dht_listo = 1;
+}
+
+// Interrupcion por cambios en PD4
+ISR(PCINT2_vect)
+{
+    uint8_t nivel = PIND & (1 << DHT11_PIN);
+    uint8_t fase = dht_fase;
+
+    if (fase == DHT_ESPERANDO_BAJADA)
+    {
+        if (!nivel)
+            dht_fase = DHT_ESPERANDO_SUBIDA;
+    }
+    else if (fase == DHT_ESPERANDO_SUBIDA)
+    {
+        if (nivel)
+            dht_fase = DHT_FIN_RESPUESTA;
+    }
+    else if (fase == DHT_FIN_RESPUESTA)
+    {
+        if (!nivel)
+            dht_fase = DHT_INICIO_BIT;
+    }
+    else if (fase == DHT_INICIO_BIT)
+    {
+        if (nivel)
+        {
+            TCNT2 = 0;
+            dht_fase = DHT_FIN_BIT;
+        }
+    }
+    else if (fase == DHT_FIN_BIT)
+    {
+        if (!nivel)
+        {
+            // 26-28 us es 0; 70 us es 1
+            // 100 cuentas equivalen a 50 us
+            uint8_t bit = (TCNT2 > 100) ? 1 : 0;
+
+            uint8_t indice = dht_bits / 8;
+
+            dht_datos[indice] =
+                (dht_datos[indice] << 1) | bit;
+
+            dht_bits++;
+
+            if (dht_bits >= 40)
+            {
+                dht_finalizar(0);
+            }
+            else
+            {
+                dht_fase = DHT_INICIO_BIT;
+            }
+        }
+    }
+}
+
+
 // =====================================
 // 14. INICIALIZACION GENERAL
 // =====================================
 
 static void inicializar_hardware(void)
 {
-	cli();
+    cli();
 
-	DDRB |= (1 << LED) | (1 << BUZZER);
+    DDRB |= (1 << LED) | (1 << BUZZER);
 
-	PORTB &= ~((1 << LED) | (1 << BUZZER));
+    PORTB &= ~((1 << LED) | (1 << BUZZER));
 
-	configurar_timer0();
+    configurar_timer0();
 	configurar_timer1();
 	configurar_adc();
 	configurar_int0();
+	configurar_dht11();
 
-	sei();
+    i2c_init();
+
+    sei();
+
+    lcd_init();
 }
 
 // =====================================
@@ -299,10 +592,11 @@ static void atender_boton(uint32_t ahora)
 	ultima_actividad = ahora;
 
 	if (estado == STANDBY ||
-	estado == APAGADO)
-	{
-		estado = ACTIVO;
-	}
+    estado == APAGADO)
+{
+    estado = ACTIVO;
+    lcd_retroiluminacion(1);
+}
 
 	if (estado != EMERGENCIA)
 	{
@@ -329,9 +623,10 @@ static void actualizar_fsm(uint32_t ahora)
 	else if (estado == STANDBY)
 	{
 		if (inactividad >= TIEMPO_APAGADO_MS)
-		{
-			estado = APAGADO;
-		}
+{
+    estado = APAGADO;
+    lcd_retroiluminacion(0);
+}
 	}
 	else if (estado == APAGADO)
 	{
@@ -351,77 +646,197 @@ static void actualizar_fsm(uint32_t ahora)
 
 static void tarea_lcd(uint32_t ahora)
 {
-	if ((uint32_t)(ahora - ultima_lcd)
-	< TIEMPO_LCD_MS)
-	return;
+    if ((uint32_t)(ahora - ultima_lcd)
+        < TIEMPO_LCD_MS)
+        return;
 
-	ultima_lcd = ahora;
+    ultima_lcd = ahora;
 
-	// Integrar controlador LCD real.
-	//
-	// ACTIVO: mostrar estado y valor_adc
-	// STANDBY: mostrar "Esperando..."
-	// APAGADO: apagar retroiluminacion
-	// EMERGENCIA: mostrar alarma
+    lcd_posicion(0, 0);
+
+   if (estado == ACTIVO)
+{
+    lcd_texto("ESTADO: ACTIVO  ");
+
+    lcd_posicion(1, 0);
+
+    if (dht_valido)
+    {
+        lcd_texto("T:");
+        lcd_numero(temperatura);
+        lcd_texto("C H:");
+        lcd_numero(humedad);
+        lcd_texto("%     ");
+    }
+    else
+    {
+        lcd_texto("DHT11: SIN DATO ");
+    }
+}
+    else if (estado == STANDBY)
+    {
+        lcd_texto("ESTADO: STANDBY ");
+
+        lcd_posicion(1, 0);
+        lcd_texto("Esperando...    ");
+    }
+    else if (estado == APAGADO)
+    {
+        lcd_texto("ESTADO: APAGADO ");
+
+        lcd_posicion(1, 0);
+        lcd_texto("                ");
+    }
+    else if (estado == EMERGENCIA)
+    {
+        lcd_texto("EMERGENCIA     ");
+
+        lcd_posicion(1, 0);
+        lcd_texto("SISTEMA SEGURO ");
+    }
 }
 
 // =====================================
-// 21. SENSOR DIGITAL - PENDIENTE
+// 21. LECTURA DEL SENSOR DHT11
 // =====================================
 
 static void tarea_temperatura(uint32_t ahora)
 {
-	if ((uint32_t)(ahora - ultima_temp)
-	< TIEMPO_TEMP_MS)
-	return;
+    if (estado_dht == DHT_REPOSO)
+    {
+        if ((uint32_t)(ahora - ultima_temp)
+            < TIEMPO_TEMP_MS)
+            return;
 
-	ultima_temp = ahora;
+        ultima_temp = ahora;
 
-	// Integrar lectura del sensor digital.
-	// Debe respetar los tiempos del modelo
-	// y no bloquear las demas tareas.
+        // Iniciar comunicacion: DATA en bajo
+        PCICR &= ~(1 << PCIE2);
+
+        PORTD &= ~(1 << DHT11_PIN);
+        DDRD |= (1 << DHT11_PIN);
+
+        dht_inicio_ms = ahora;
+        estado_dht = DHT_INICIO;
+        return;
+    }
+
+    if (estado_dht == DHT_INICIO)
+    {
+        // Mantener DATA en bajo al menos 18 ms
+        if ((uint32_t)(ahora - dht_inicio_ms) < 18UL)
+            return;
+
+        ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
+        {
+            dht_bits = 0;
+            dht_fase = DHT_ESPERANDO_BAJADA;
+            dht_listo = 0;
+            dht_error = 0;
+
+            for (uint8_t i = 0; i < 5; i++)
+                dht_datos[i] = 0;
+
+            // Liberar linea: entrada con pull-up
+            PORTD |= (1 << DHT11_PIN);
+            DDRD &= ~(1 << DHT11_PIN);
+
+            TCNT2 = 0;
+            PCIFR = (1 << PCIF2);
+            PCICR |= (1 << PCIE2);
+        }
+
+        dht_inicio_ms = ahora;
+        estado_dht = DHT_RECEPCION;
+        return;
+    }
+
+    if (estado_dht == DHT_RECEPCION)
+    {
+        uint8_t datos[5];
+        uint8_t listo;
+        uint8_t error;
+
+        ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
+        {
+            listo = dht_listo;
+            error = dht_error;
+
+            for (uint8_t i = 0; i < 5; i++)
+                datos[i] = dht_datos[i];
+
+            if (listo)
+                dht_listo = 0;
+        }
+
+        if (listo)
+        {
+            uint8_t suma =
+                datos[0] + datos[1] +
+                datos[2] + datos[3];
+
+            if (suma == datos[4])
+            {
+                humedad = datos[0];
+                temperatura = datos[2];
+                dht_valido = true;
+            }
+            else
+            {
+                dht_valido = false;
+            }
+
+            estado_dht = DHT_REPOSO;
+            return;
+        }
+
+        if (error ||
+            (uint32_t)(ahora - dht_inicio_ms) >= 8UL)
+        {
+            PCICR &= ~(1 << PCIE2);
+            dht_valido = false;
+            estado_dht = DHT_REPOSO;
+        }
+    }
 }
 
-// =====================================
-// 22. PROGRAMA PRINCIPAL
-// =====================================
+ // =====================================
+ // 22. PROGRAMA PRINCIPAL
+ // =====================================
 
 int main(void)
 {
-	inicializar_hardware();
+    inicializar_hardware();
 
-	uint32_t ahora = obtener_tiempo();
+    uint32_t ahora = obtener_tiempo();
 
-	ultimo_led = ahora;
-	ultima_lcd = ahora;
-	ultima_temp = ahora;
-	ultima_actividad = ahora;
+    ultimo_led = ahora;
+    ultima_lcd = ahora;
+    ultima_temp = ahora;
+    ultima_actividad = ahora;
 
-	while (1)
-	{
-		ahora = obtener_tiempo();
+    while (1)
+    {
+        ahora = obtener_tiempo();
 
-		atender_boton(ahora);
-		actualizar_fsm(ahora);
-		tarea_buzzer(ahora);
+        atender_boton(ahora);
+        actualizar_fsm(ahora);
+        tarea_buzzer(ahora);
+        tarea_lcd(ahora);
 
-		if (estado == ACTIVO)
-		{
-			tarea_led(ahora);
-			tarea_adc();
-			comprobar_adc();
-			tarea_lcd(ahora);
-			tarea_temperatura(ahora);
-		}
-		else if (estado == STANDBY)
-		{
-			tarea_lcd(ahora);
-		}
-		else if (estado == APAGADO)
-		{
-			PORTB &= ~(1 << LED);
-		}
-	}
+        if (estado == ACTIVO)
+        {
+            tarea_led(ahora);
+            tarea_adc();
+            comprobar_adc();
+            tarea_temperatura(ahora);
+        }
+        else if (estado == APAGADO)
+        {
+            PORTB &= ~(1 << LED);
+        }
+    }
+
+    return 0;
 }
-
 
