@@ -140,21 +140,44 @@ void st_standby(void) {
 
 	if ((uint32_t)(ahora - ultima_actividad) >= TIEMPO_APAGADO_MS) {
 		estado_actual = st_apagado;
+		return; //Salimos inmediatamente para no entrar en Idle si ya paso a apagado 
 	}
+	
+	// --- ACTIVIDAD 1: MODO SLEEP IDLE ---
+	set_sleep_mode(SLEEP_MODE_IDLE);
+	sleep_enable();
+	sleep_cpu(); // La CPU duerme aquí. Despertará cada 1 ms.
+	sleep_disable();
+}
+	
 }
 
 void st_apagado(void) {
-	uint32_t ahora = obtener_tiempo();
 
 	PORTB &= ~((1 << LED) | (1 << BUZZER)); // Apaga todo
 
 	if (evento_despertar) {
+		// Al despertar, sincronizamos el tiempo para que no haya un salto de 30 segundos en los timers
+		ultima_actividad = obtener_tiempo();
 		estado_actual = st_activo;
 		return;
 	}
 
-	tarea_buzzer(ahora);
+    // --- ACTIVIDAD 3: REGISTRO PRR (Deshabilitar Periféricos) ---
+   // Según las pautas, en apagado profundo apagamos lo que no se usa.
+   // PRADC (0x01), PRUSART0 (0x02), PRSPI (0x04), PRTIM1 (0x08), PRTIM0 (0x20), PRTIM2 (0x40), PRTWI (0x80)
+   uint8_t prr_original = PRR; // Guardamos el estado original
+   PRR = 0xEF; // Deshabilita casi todo (Excepto el bit 4 reservado)
+
+   // --- AL DESPERTAR ---
+   // Restaurar los periféricos
+   PRR = prr_original;
+   // Forzamos un evento de despertar por si acaso
+   evento_despertar = 1;
 }
+
+}
+
 
 // Interrupción de tiempo
 ISR(TIMER0_COMPA_vect) {
