@@ -23,7 +23,7 @@
 #define PRUEBA_RELOJ 6
 
 // Elegimos la prueba
-#define PRUEBA_ACTUAL PRUEBA_WDT
+#define PRUEBA_ACTUAL PRUEBA_RELOJ
 
 volatile uint16_t valor_adc = 0;
 volatile uint8_t adc_terminado = 0;
@@ -329,6 +329,47 @@ int main(void)
 
             // Esperar 2 segundos
             _delay_ms(2000);
+        }
+        
+        // ====================================
+        // PRUEBA 6: FRECUENCIA DEL RELOJ
+        // ====================================
+        else if (PRUEBA_ACTUAL == PRUEBA_RELOJ)
+        {
+            // Restaurar frecuencia inicial de 16 MHz
+            reloj_configurar(RELOJ_16MHZ);
+
+            // Apagar LED
+            PORTB &= ~(1 << PB0);
+
+            // Esperar pulsacion del boton
+            while (PIND & (1 << PD2)) {}
+
+            // Esperar a que suelte el boton
+            while (!(PIND & (1 << PD2))) {}
+
+            // Cambiar frecuencia a 2 MHz
+            reloj_configurar(RELOJ_2MHZ);
+
+            // Señal para mediciones
+            mediciones_inicio();
+
+            // Encender LED
+            PORTB |= (1 << PB0);
+
+            // Retardo afectado por la frecuencia
+            _delay_ms(100);
+
+            // Apagar LED
+            PORTB &= ~(1 << PB0);
+
+            mediciones_fin();
+
+            // Restaurar frecuencia a 16 MHz
+            reloj_configurar(RELOJ_16MHZ);
+
+            // Esperar antes de repetir
+            _delay_ms(1000);
         }
     }  
 }
