@@ -23,7 +23,7 @@
 #define PRUEBA_RELOJ 6
 
 // Elegimos la prueba
-#define PRUEBA_ACTUAL PRUEBA_ADC_NOISE
+#define PRUEBA_ACTUAL PRUEBA_POWER_DOWN
 
 volatile uint16_t valor_adc = 0;
 volatile uint8_t adc_terminado = 0;
@@ -190,6 +190,64 @@ int main(void)
             PORTB &= ~(1 << PB0);
             mediciones_fin();
          }
+        
+        // ====================================
+        // PRUEBA 3: SLEEP POWER-DOWN
+        // ====================================
+        else if (PRUEBA_ACTUAL == PRUEBA_POWER_DOWN)
+        {
+            // Apagar LED
+            PORTB &= ~(1 << PB0);
+
+            // Esperar que el botón esté suelto
+            while (!(PIND & (1 << PD2))) {}
+
+            // Configurar INT0 por nivel bajo
+            cli();
+            EIMSK &= ~(1 << INT0);
+
+            EICRA &= ~((1 << ISC01) | (1 << ISC00));
+
+            // Limpiar interrupción pendiente
+            EIFR = (1 << INTF0);
+
+            // Seleccionar Power-Down
+            set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+
+            // Preparar Sleep
+            sleep_enable();
+
+            // Habilitar INT0
+            EIMSK |= (1 << INT0);
+
+            // Dormir hasta presionar el botón
+            sei();
+            sleep_cpu();
+
+            // El Arduino despertó
+            sleep_disable();
+
+            // Deshabilitar INT0 para evitar interrupciones
+            // repetidas mientras el botón esté presionado
+            EIMSK &= ~(1 << INT0);
+
+            // Señal de medición
+            mediciones_inicio();
+
+            // Encender LED durante 500 ms
+            PORTB |= (1 << PB0);
+            _delay_ms(500);
+
+            // Apagar LED
+            PORTB &= ~(1 << PB0);
+            mediciones_fin();
+
+            // Esperar que suelte el botón
+            while (!(PIND & (1 << PD2))) {}
+
+            // Limpiar evento anterior
+            boton_presionado();
+        }
     }  
 }
 
