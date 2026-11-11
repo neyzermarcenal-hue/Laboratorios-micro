@@ -23,7 +23,7 @@
 #define PRUEBA_RELOJ 6
 
 // Elegimos la prueba
-#define PRUEBA_ACTUAL PRUEBA_PERIFERICOS
+#define PRUEBA_ACTUAL PRUEBA_WDT
 
 volatile uint16_t valor_adc = 0;
 volatile uint8_t adc_terminado = 0;
@@ -289,6 +289,46 @@ int main(void)
 
             // Esperar 1 segundo antes de repetir
             _delay_ms(1000);
+        }
+        
+        // ====================================
+        // PRUEBA 5: WATCHDOG TIMER
+        // ====================================
+        else if (PRUEBA_ACTUAL == PRUEBA_WDT)
+        {
+            // Apagar LED inicialmente
+            PORTB &= ~(1 << PB0);
+
+            // Iniciar Watchdog con tiempo de 1 segundo
+            watchdog_iniciar(WDT_1S);
+
+            // Realizar 5 interrupciones del Watchdog
+            uint8_t contador = 0;
+
+            while (contador < 5)
+            {
+                // Comprobar si ocurrio la interrupcion
+                if (watchdog_evento())
+                {
+                    // Encender LED
+                    PORTB |= (1 << PB0);
+
+                    // Mantener encendido 100 ms
+                    _delay_ms(100);
+
+                    // Apagar LED
+                    PORTB &= ~(1 << PB0);
+
+                    // Incrementar contador
+                    contador++;
+                }
+            }
+
+            // Desactivar Watchdog
+            watchdog_detener();
+
+            // Esperar 2 segundos
+            _delay_ms(2000);
         }
     }  
 }
