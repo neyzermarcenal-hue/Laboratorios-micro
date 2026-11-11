@@ -23,7 +23,7 @@
 #define PRUEBA_RELOJ 6
 
 // Elegimos la prueba
-#define PRUEBA_ACTUAL PRUEBA_POWER_DOWN
+#define PRUEBA_ACTUAL PRUEBA_PERIFERICOS
 
 volatile uint16_t valor_adc = 0;
 volatile uint8_t adc_terminado = 0;
@@ -247,6 +247,48 @@ int main(void)
 
             // Limpiar evento anterior
             boton_presionado();
+        }
+        
+        // ====================================
+        // PRUEBA 4: DESACTIVACION DE PERIFERICOS
+        // ====================================
+        else if (PRUEBA_ACTUAL == PRUEBA_PERIFERICOS)
+        {
+            // Restaurar todos los perifericos
+            perifericos_restaurar();
+
+            // Apagar LED
+            PORTB &= ~(1 << PB0);
+
+            // Esperar a que se presione el boton
+            while (PIND & (1 << PD2)) {}
+
+            // Esperar a que se suelte
+            while (!(PIND & (1 << PD2))) {}
+
+            // Desactivar perifericos que no utilizamos
+            periferico_desactivar(
+                (1 << PRADC) |
+                (1 << PRSPI) |
+                (1 << PRTWI) |
+                (1 << PRTIM1) |
+                (1 << PRTIM2)
+            );
+
+            // Indicar que se desactivaron
+            PORTB |= (1 << PB0);
+
+            // Mantener LED encendido 1 segundo
+            _delay_ms(1000);
+
+            // Apagar LED
+            PORTB &= ~(1 << PB0);
+
+            // Restaurar los perifericos
+            perifericos_restaurar();
+
+            // Esperar 1 segundo antes de repetir
+            _delay_ms(1000);
         }
     }  
 }
