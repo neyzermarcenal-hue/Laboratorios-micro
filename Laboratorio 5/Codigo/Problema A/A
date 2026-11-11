@@ -377,6 +377,8 @@ static void lcd_init(void)
     lcd_comando(0x01); // Limpiar pantalla
 }
 
+// Retroiluminacion de la lcd
+
 static void lcd_retroiluminacion(uint8_t encendida)
 {
     lcd_luz = encendida ? LCD_LUZ : 0;
