@@ -11,7 +11,11 @@ static volatile uint8_t evento_wdt = 0;
 // Interrupcion del Watchdog
 ISR(WDT_vect)
 {
+    // Registrar interrupcion del Watchdog
     evento_wdt = 1;
+
+    // Mantener habilitado el modo interrupcion
+    WDTCSR |= (1 << WDIE);
 }
 
 // Configurar WDT en modo interrupcion
