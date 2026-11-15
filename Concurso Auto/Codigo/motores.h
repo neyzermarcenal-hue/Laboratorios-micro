@@ -10,6 +10,8 @@ void motores_init(void);
 // Control de movimiento
 void motores_avanzar(void);
 void motores_retroceder(void);
+void motores_izquierda(void);
+void motores_derecha(void);
 void motores_detener(void);
 
 // Control de velocidad (0 a 255)
