@@ -3,6 +3,7 @@
 #include "comandos.h"
 #include "bluetooth.h"
 #include "motores.h"
+#include "agarre.h"
 
 // Variables para recibir la velocidad
 static uint8_t recibiendo_velocidad = 0;
@@ -105,11 +106,11 @@ void comandos_ejecutar(char comando)
        break;
 
        case 'O':
-       // Pendiente: abrir pinza
+       agarre_abrir();
        break;
 
        case 'C':
-       // Pendiente: cerrar pinza
+       agarre_cerrar();
        break;
 
        default:
