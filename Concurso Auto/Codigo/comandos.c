@@ -7,7 +7,26 @@
 // Variables para recibir la velocidad
 static uint8_t recibiendo_velocidad = 0;
 static uint8_t valor_velocidad = 0;
-static uint8_t cantidad_digitos = 0;
+static uint8_t velocidad_valida = 0;
+
+//Velocidad
+
+static void aplicar_velocidad(uint8_t porcentaje)
+{
+	uint8_t pwm;
+
+	// Limitar el porcentaje a 100
+	if (porcentaje > 100)
+	{
+		porcentaje = 100;
+	}
+
+	// Convertir porcentaje a PWM
+	pwm = (uint8_t)(((uint32_t)porcentaje * 255UL) / 100UL);
+
+	motores_velocidad(pwm);
+}
+
 
 // =====================================
 // INTERPRETACION DE COMANDOS
@@ -15,6 +34,45 @@ static uint8_t cantidad_digitos = 0;
 
 void comandos_ejecutar(char comando)
 {
+	// Procesamiento de velocidad: V70;
+	if (recibiendo_velocidad)
+	{
+		if (comando >= '0' && comando <= '9')
+		{
+			velocidad_valida = 1;
+
+			valor_velocidad = valor_velocidad * 10
+			+ (comando - '0');
+
+			if (valor_velocidad > 100)
+			{
+				valor_velocidad = 100;
+			}
+
+			return;
+		}
+
+		if (comando == ';')
+		{
+			if (velocidad_valida)
+			{
+				aplicar_velocidad(
+				(uint8_t)valor_velocidad
+				);
+			}
+
+			recibiendo_velocidad = 0;
+			valor_velocidad = 0;
+			velocidad_valida = 0;
+			return;
+		}
+
+		// Cancelar un comando de velocidad incompleto
+		recibiendo_velocidad = 0;
+		valor_velocidad = 0;
+		velocidad_valida = 0;
+	}
+
     switch (comando)
     {
         case 'F':
@@ -26,19 +84,38 @@ void comandos_ejecutar(char comando)
             // Retroceder
             motores_retroceder();
             break;
+			
+		case 'L':
+		   motores_izquierda();
+		   break;
+		   
+		case 'R':
+		   motores_derecha();
+		   break;
 
         case 'S':
             // Detener
             motores_detener();
             break;
+			
+       case 'V':
+       recibiendo_velocidad = 1;
+       valor_velocidad = 0;
+       velocidad_valida = 0;
+       break;
 
-        default:
-            // Comando no reconocido
-            bluetooth_enviar_texto("ERROR\r\n");
-            return;
-    }
+       case 'O':
+       // Pendiente: abrir pinza
+       break;
 
-    bluetooth_enviar_texto("OK\r\n");
+       case 'C':
+       // Pendiente: cerrar pinza
+       break;
+
+       default:
+       // Ignorar comandos desconocidos
+       break;
+       }
 }
 
 // =====================================
@@ -47,93 +124,10 @@ void comandos_ejecutar(char comando)
 
 void comandos_procesar(void)
 {
-    if (!bluetooth_disponible())
-    {
-       return;
-    }
-	
-	char dato= bluetooth_leer();
-	
-	//S siempre tiene prioridad para detener
-	if(dato=='S')
+	while (bluetooth_disponible())
 	{
-		  recibiendo_velocidad = 0;
-		  valor_velocidad = 0;
-		  cantidad_digitos = 0;
+		char comando = bluetooth_leer();
 
-		  motores_detener();
-		  bluetooth_enviar_texto("OK\r\n");
-		  return;
+		comandos_ejecutar(comando);
 	}
-	
-	  // Comienzo de un comando de velocidad
-	  if (dato == 'V')
-	  {
-		  recibiendo_velocidad = 1;
-		  valor_velocidad = 0;
-		  cantidad_digitos = 0;
-		  return;
-	  }
-	  
-	   // Procesar los caracteres de velocidad
-	   if (recibiendo_velocidad)
-	   {
-		   if (dato >= '0' && dato <= '9')
-		   {
-			   uint8_t digito = dato - '0';
-
-			   if (cantidad_digitos >= 3 ||
-			   valor_velocidad > (100 - digito) / 10)
-			   {
-				   recibiendo_velocidad = 0;
-				   bluetooth_enviar_texto("ERROR\r\n");
-				   return;
-			   }
-
-			   valor_velocidad =
-			   valor_velocidad * 10 + digito;
-
-			   cantidad_digitos++;
-			   return;
-		   }
-
-		   // Fin del comando de velocidad
-		   if (dato == ';')
-		   {
-			   if (cantidad_digitos > 0)
-			   {
-				   uint8_t pwm =
-				   ((uint32_t)valor_velocidad * 255 + 50)
-				   / 100;
-
-				   motores_velocidad(pwm);
-				   bluetooth_enviar_texto("OK\r\n");
-			   }
-			   else
-			   {
-				   bluetooth_enviar_texto("ERROR\r\n");
-			   }
-
-			   recibiendo_velocidad = 0;
-			   return;
-		   }
-
-		   // Comando de velocidad incorrecto
-		   recibiendo_velocidad = 0;
-		   bluetooth_enviar_texto("ERROR\r\n");
-		   return;
-	   }
-
-	   // Ignorar terminadores de linea
-	   if (dato == '\r' || dato == '\n')
-	   {
-		   return;
-	   }
-
-	   // Comandos de movimiento existentes
-	   comandos_ejecutar(dato);
-   }
 }
-
-
-
