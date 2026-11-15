@@ -28,9 +28,9 @@ void motores_init(void)
 
     DDRB |= (1 << IN3) | (1 << IN4);
 
-    // Estado inicial: motores detenidos
-    PORTD &= ~((1 << IN1) | (1 << IN2));
-    PORTB &= ~((1 << IN3) | (1 << IN4));
+      // Detener los motores inicialmente
+      motores_detener();
+
 
     // Timer0 en modo Fast PWM
     // PWM en PD5 (OC0B) y PD6 (OC0A)
@@ -60,12 +60,13 @@ void motores_velocidad(uint8_t velocidad)
 
 void motores_avanzar(void)
 {
-    PORTD |= (1 << IN1);
-    PORTD &= ~(1 << IN2);
+	PORTD &= ~((1 << IN1) | (1 << IN2));
+	PORTB &= ~((1 << IN3) | (1 << IN4));
 
-    PORTB |= (1 << IN3);
-    PORTB &= ~(1 << IN4);
+	PORTD |= (1 << IN1);
+	PORTB |= (1 << IN3);
 }
+
 
 // =====================================
 // MOVIMIENTO HACIA ATRAS
@@ -73,11 +74,41 @@ void motores_avanzar(void)
 
 void motores_retroceder(void)
 {
-    PORTD &= ~(1 << IN1);
-    PORTD |= (1 << IN2);
+	PORTD &= ~((1 << IN1) | (1 << IN2));
+	PORTB &= ~((1 << IN3) | (1 << IN4));
 
-    PORTB &= ~(1 << IN3);
-    PORTB |= (1 << IN4);
+	PORTD |= (1 << IN2);
+	PORTB |= (1 << IN4);
+}
+
+// =====================================
+// GIRAR A LA IZQUIERDA
+// =====================================
+
+void motores_izquierda(void)
+{
+	// Motor izquierdo hacia atras
+	PORTD &= ~((1 << IN1) | (1 << IN2));
+	PORTD |= (1 << IN2);
+
+	// Motor derecho hacia adelante
+	PORTB &= ~((1 << IN3) | (1 << IN4));
+	PORTB |= (1 << IN3);
+}
+
+// =====================================
+// GIRAR A LA DERECHA
+// =====================================
+
+void motores_derecha(void)
+{
+	// Motor izquierdo hacia adelante
+	PORTD &= ~((1 << IN1) | (1 << IN2));
+	PORTD |= (1 << IN1);
+
+	// Motor derecho hacia atras
+	PORTB &= ~((1 << IN3) | (1 << IN4));
+	PORTB |= (1 << IN4);
 }
 
 // =====================================
