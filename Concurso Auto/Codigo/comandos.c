@@ -47,7 +47,7 @@ void comandos_ejecutar(char comando)
 
 void comandos_procesar(void)
 {
-    if (bluetooth_disponible())
+    if (!bluetooth_disponible())
     {
        return;
     }
