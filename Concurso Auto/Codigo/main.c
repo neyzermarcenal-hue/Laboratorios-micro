@@ -3,27 +3,31 @@
 
 #include <avr/io.h>
 
-// Nuestra libreria
+// Nuestras librerias
 #include "motores.h"
 #include "bluetooth.h"
 #include "comandos.h"
+#include "agarre.h"
 
 int main(void)
 {
-    // Inicializar motores y PWM
-    motores_init();
+	// Inicializar motores
+	motores_init();
 
-    // Inicializar comunicacion Bluetooth
-    bluetooth_init();
+	// Inicializar pinza
+	agarre_init();
 
-    // Confirmar inicio del sistema
-    bluetooth_enviar_texto("ROBOT LISTO\r\n");
+	// Inicializar Bluetooth
+	bluetooth_init();
 
-    while (1)
-    {
-        // Procesar comandos Bluetooth
-        comandos_procesar();
-    }
+	// Mensaje de inicio
+	bluetooth_enviar_texto("ROBOT LISTO\r\n");
 
-    return 0;
+	while (1)
+	{
+		// Procesar comandos recibidos
+		comandos_procesar();
+	}
+
+	return 0;
 }
