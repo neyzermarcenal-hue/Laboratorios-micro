@@ -1,95 +1,88 @@
 
+#ifndef F_CPU
 #define F_CPU 16000000UL
+#endif
 
 #include <avr/io.h>
 #include <stdint.h>
 #include "agarre.h"
 
-// =====================================
-// CONFIGURACION DEL SERVOMOTOR
-// =====================================
+// Configuracion del servo
+#define ANGULO_ABIERTO 30U
+#define ANGULO_CERRADO 90U
 
-// Servo conectado a D9 (PB1 / OC1A)
-#define SERVO PB1
+#define PASO_GRADOS 2U
 
-// Angulos iniciales de la pinza
-#define ANGULO_ABIERTO  30
-#define ANGULO_CERRADO  90
+#define PULSO_MINIMO 2000U
+#define PULSO_MAXIMO 4000U
+#define PERIODO_SERVO 39999U
 
-// Timer1: prescaler 8, 0.5 us por cuenta
-// Periodo de 20 ms (50 Hz)
-#define PERIODO_SERVO 39999
+static uint8_t angulo_actual = ANGULO_CERRADO;
+static uint8_t angulo_objetivo = ANGULO_CERRADO;
 
-// Pulsos iniciales entre 1 y 2 ms
-#define PULSO_MINIMO 2000
-#define PULSO_MAXIMO 4000
+// Actualizar ancho de pulso del servo
+static void servo_escribir(uint8_t angulo)
+{
+	OCR1A = (uint16_t)(
+	PULSO_MINIMO +
+	((uint32_t)angulo *
+	(PULSO_MAXIMO - PULSO_MINIMO)) / 180UL
+	);
+}
 
-// =====================================
-// INICIALIZACION
-// =====================================
-
+// Inicializar Timer1 para servo en D9
 void agarre_init(void)
 {
-	// D9 como salida
-	DDRB |= (1 << SERVO);
+	DDRB |= (1 << PB1);
 
-	// Detener Timer1 durante configuracion
 	TCCR1A = 0;
 	TCCR1B = 0;
 
-	// Periodo de 20 ms
 	ICR1 = PERIODO_SERVO;
 
-	// Posicion inicial: pinza cerrada
-	agarre_angulo(ANGULO_CERRADO);
+	servo_escribir(angulo_actual);
 
-	// Fast PWM, modo 14
-	// Salida no inversora en OC1A
-	TCCR1A = (1 << COM1A1) | (1 << WGM11);
+	TCCR1A = (1 << COM1A1) |
+	(1 << WGM11);
 
-	// Prescaler 8
-	TCCR1B = (1 << WGM13)
-	| (1 << WGM12)
-	| (1 << CS11);
+	TCCR1B = (1 << WGM13) |
+	(1 << WGM12) |
+	(1 << CS11);
 }
 
-// =====================================
-// CONTROL DEL ANGULO
-// =====================================
-
-void agarre_angulo(uint8_t angulo)
-{
-	uint16_t pulso;
-
-	// Limitar angulo entre 0 y 180
-	if (angulo > 180)
-	{
-		angulo = 180;
-	}
-
-	// Convertir angulo a pulso PWM
-	pulso = PULSO_MINIMO
-	+ (uint16_t)(((uint32_t)angulo *
-	(PULSO_MAXIMO - PULSO_MINIMO)) / 180UL);
-
-	// Actualizar posicion del servo
-	OCR1A = pulso;
-}
-
-// =====================================
-// ABRIR PINZA
-// =====================================
-
+// Orden de apertura
 void agarre_abrir(void)
 {
-	agarre_angulo(ANGULO_ABIERTO);
+	angulo_objetivo = ANGULO_ABIERTO;
 }
 
-// =====================================
-// CERRAR PINZA
-// =====================================
-
+// Orden de cierre
 void agarre_cerrar(void)
 {
-	agarre_angulo(ANGULO_CERRADO);
+	angulo_objetivo = ANGULO_CERRADO;
+}
+
+// Actualizar gradualmente el angulo
+void agarre_tarea(void)
+{
+	if (angulo_actual < angulo_objetivo)
+	{
+		uint8_t restante =
+		(uint8_t)(angulo_objetivo - angulo_actual);
+
+		angulo_actual +=
+		(restante >= PASO_GRADOS) ?
+		PASO_GRADOS : restante;
+	}
+	else if (angulo_actual > angulo_objetivo)
+	{
+		uint8_t restante =
+		(uint8_t)(angulo_actual - angulo_objetivo);
+
+		angulo_actual -=
+		(restante >= PASO_GRADOS) ?
+		PASO_GRADOS : restante;
+	}
+
+	servo_escribir(angulo_actual);
 }

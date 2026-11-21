@@ -10,7 +10,6 @@ void agarre_init(void);
 void agarre_abrir(void);
 void agarre_cerrar(void);
 
-// Establecer posicion del servo
-void agarre_angulo(uint8_t angulo);
+void agarre_tarea(void);
 
 #endif
