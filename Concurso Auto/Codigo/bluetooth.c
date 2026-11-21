@@ -4,6 +4,7 @@
 #endif
 
 #include <avr/io.h>
+#include <avr/interrupt.h>
 #include <stdint.h>
 #include "bluetooth.h"
 
@@ -11,72 +12,71 @@
 // CONFIGURACION UART
 // =====================================
 
-#define BAUD_RATE 9600UL
-#define UBRR_VALOR ((F_CPU / (16UL * BAUD_RATE)) - 1UL)
+#define BAUD 9600UL
+#define BUFFER_RX 64U
 
-// =====================================
-// INICIALIZACION BLUETOOTH
-// =====================================
+static volatile uint8_t buffer_rx[BUFFER_RX];
+static volatile uint8_t rx_cabeza = 0;
+static volatile uint8_t rx_cola = 0;
 
+// Inicializar comunicacion UART
 void bluetooth_init(void)
 {
-    // Configurar velocidad de comunicacion
-    UBRR0H = (uint8_t)(UBRR_VALOR >> 8);
-    UBRR0L = (uint8_t)UBRR_VALOR;
+    uint16_t ubrr =
+    (uint16_t)(F_CPU / (16UL * BAUD) - 1UL);
 
-    // Modo UART normal
+    UBRR0H = (uint8_t)(ubrr >> 8);
+    UBRR0L = (uint8_t)ubrr;
+
     UCSR0A = 0;
 
-    // Habilitar receptor y transmisor
-    UCSR0B = (1 << RXEN0) | (1 << TXEN0);
-
-    // 8 bits de datos, sin paridad, 1 stop
+    // 8 bits de datos, sin paridad, 1 bit de parada
     UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
+
+    // Habilitar recepcion, transmision e interrupcion RX
+    UCSR0B = (1 << RXEN0) |
+    (1 << TXEN0) |
+    (1 << RXCIE0);
 }
 
-// =====================================
-// VERIFICAR DATOS DISPONIBLES
-// =====================================
+// Interrupcion cuando llega un dato Bluetooth
+ISR(USART_RX_vect)
+{
+	uint8_t dato = UDR0;
 
+	uint8_t siguiente =
+	(uint8_t)((rx_cabeza + 1U) & (BUFFER_RX - 1U));
+
+	if (siguiente != rx_cola)
+	{
+		buffer_rx[rx_cabeza] = dato;
+		rx_cabeza = siguiente;
+	}
+}
+
+// Comprobar si existen datos recibidos
 uint8_t bluetooth_disponible(void)
 {
-    return (UCSR0A & (1 << RXC0)) != 0;
+     return rx_cabeza != rx_cola;
 }
 
-// =====================================
-// LEER CARACTER RECIBIDO
-// =====================================
-
-char bluetooth_leer(void)
+// Leer un byte del buffer
+uint8_t bluetooth_leer(void)
 {
-    // Esperar hasta recibir un dato
-    while (!bluetooth_disponible());
+	uint8_t dato = buffer_rx[rx_cola];
 
-    return UDR0;
+	rx_cola =
+	(uint8_t)((rx_cola + 1U) & (BUFFER_RX - 1U));
+
+	return dato;
 }
 
-// =====================================
-// ENVIAR CARACTER
-// =====================================
-
-void bluetooth_enviar(char dato)
+// Enviar un byte por UART
+void bluetooth_enviar(uint8_t dato)
 {
-    // Esperar hasta poder transmitir
-    while (!(UCSR0A & (1 << UDRE0)));
+	while (!(UCSR0A & (1 << UDRE0)))
+	{
+	}
 
-    UDR0 = dato;
+	UDR0 = dato;
 }
-
-// =====================================
-// ENVIAR TEXTO
-// =====================================
-
-void bluetooth_enviar_texto(const char *texto)
-{
-    while (*texto != '\0')
-    {
-        bluetooth_enviar(*texto);
-        texto++;
-    }
-}
-

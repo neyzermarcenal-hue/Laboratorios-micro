@@ -14,10 +14,7 @@ uint8_t bluetooth_disponible(void);
 char bluetooth_leer(void);
 
 // Enviar un caracter
-void bluetooth_enviar(char dato);
-
-// Enviar una cadena de texto
-void bluetooth_enviar_texto(const char *texto);
+void bluetooth_enviar(uint8_t dato);
 
 #endif
 
