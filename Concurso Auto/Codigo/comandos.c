@@ -9,9 +9,9 @@
 // Trama: 0xAA, CMD, VAL, CMD XOR VAL
 
 // Variables para recibir la velocidad
-static uint8_t recibiendo_velocidad = 0;
-static uint8_t valor_velocidad = 0;
-static uint8_t velocidad_valida = 0;
+static uint8_t etapa = 0;
+static uint8_t cmd_actual = 0;
+static uint8_t valor_actual = 0;
 
 //Velocidad
 

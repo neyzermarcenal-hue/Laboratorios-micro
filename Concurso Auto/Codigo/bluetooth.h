@@ -1,4 +1,3 @@
-
 #ifndef BLUETOOTH_H_
 #define BLUETOOTH_H_
 
@@ -11,7 +10,7 @@ void bluetooth_init(void);
 uint8_t bluetooth_disponible(void);
 
 // Leer un caracter recibido
-char bluetooth_leer(void);
+uint8_t bluetooth_leer(void);
 
 // Enviar un caracter
 void bluetooth_enviar(uint8_t dato);
