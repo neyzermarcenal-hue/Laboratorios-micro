@@ -4,6 +4,9 @@
 #include "bluetooth.h"
 #include "motores.h"
 #include "agarre.h"
+#include "robot.h"
+
+// Trama: 0xAA, CMD, VAL, CMD XOR VAL
 
 // Variables para recibir la velocidad
 static uint8_t recibiendo_velocidad = 0;
@@ -12,123 +15,66 @@ static uint8_t velocidad_valida = 0;
 
 //Velocidad
 
-static void aplicar_velocidad(uint8_t porcentaje)
+void comandos_init(void)
 {
-	uint8_t pwm;
-
-	// Limitar el porcentaje a 100
-	if (porcentaje > 100)
-	{
-		porcentaje = 100;
-	}
-
-	// Convertir porcentaje a PWM
-	pwm = (uint8_t)(((uint32_t)porcentaje * 255UL) / 100UL);
-
-	motores_velocidad(pwm);
+	etapa = 0;
 }
 
-
-// =====================================
-// INTERPRETACION DE COMANDOS
-// =====================================
-
-void comandos_ejecutar(char comando)
+// Verificar que el comando y su valor sean validos
+static uint8_t trama_semantica_valida(
+uint8_t cmd,
+uint8_t valor)
 {
-	// Procesamiento de velocidad: V70;
-	if (recibiendo_velocidad)
-	{
-		if (comando >= '0' && comando <= '9')
-		{
-			velocidad_valida = 1;
+	if (cmd > 7U)
+	return 0;
 
-			valor_velocidad = valor_velocidad * 10
-			+ (comando - '0');
+	if (cmd == 0U || cmd == 5U || cmd == 6U)
+	return valor == 0U;
 
-			if (valor_velocidad > 100)
-			{
-				valor_velocidad = 100;
-			}
-
-			return;
-		}
-
-		if (comando == ';')
-		{
-			if (velocidad_valida)
-			{
-				aplicar_velocidad(
-				(uint8_t)valor_velocidad
-				);
-			}
-
-			recibiendo_velocidad = 0;
-			valor_velocidad = 0;
-			velocidad_valida = 0;
-			return;
-		}
-
-		// Cancelar un comando de velocidad incompleto
-		recibiendo_velocidad = 0;
-		valor_velocidad = 0;
-		velocidad_valida = 0;
-	}
-
-    switch (comando)
-    {
-        case 'F':
-            // Avanzar
-            motores_avanzar();
-            break;
-
-        case 'B':
-            // Retroceder
-            motores_retroceder();
-            break;
-			
-		case 'L':
-		   motores_izquierda();
-		   break;
-		   
-		case 'R':
-		   motores_derecha();
-		   break;
-
-        case 'S':
-            // Detener
-            motores_detener();
-            break;
-			
-       case 'V':
-       recibiendo_velocidad = 1;
-       valor_velocidad = 0;
-       velocidad_valida = 0;
-       break;
-
-       case 'O':
-       agarre_abrir();
-       break;
-
-       case 'C':
-       agarre_cerrar();
-       break;
-
-       default:
-       // Ignorar comandos desconocidos
-       break;
-       }
+	return valor <= 100U;
 }
 
-// =====================================
-// PROCESAR COMUNICACION BLUETOOTH
-// =====================================
-
-void comandos_procesar(void)
+// Procesar bytes recibidos desde Bluetooth
+void comandos_procesar(uint32_t ahora)
 {
 	while (bluetooth_disponible())
 	{
-		char comando = bluetooth_leer();
+		uint8_t b = bluetooth_leer();
 
-		comandos_ejecutar(comando);
+		switch (etapa)
+		{
+			case 0:
+			// Buscar byte de inicio
+			if (b == 0xAA)
+			etapa = 1;
+			break;
+
+			case 1:
+			// Recibir comando
+			cmd_actual = b;
+			etapa = 2;
+			break;
+
+			case 2:
+			// Recibir valor
+			valor_actual = b;
+			etapa = 3;
+			break;
+
+			default:
+			// Cuarto byte: checksum
+			etapa = 0;
+
+			if ((uint8_t)(cmd_actual ^ valor_actual) == b &&
+			trama_semantica_valida(cmd_actual,
+			valor_actual))
+			{
+				robot_recibir_trama(
+				cmd_actual,
+				valor_actual,
+				ahora);
+			}
+			break;
+		}
 	}
 }

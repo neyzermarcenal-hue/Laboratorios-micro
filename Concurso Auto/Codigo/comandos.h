@@ -4,11 +4,10 @@
 
 #include <stdint.h>
 
-// Interpretar un comando recibido
-void comandos_ejecutar(char comando);
+void comandos_init(void);
 
 // Consultar y procesar datos Bluetooth
-void comandos_procesar(void);
+void comandos_procesar(uint32_t ahora);
 
 #endif
 
