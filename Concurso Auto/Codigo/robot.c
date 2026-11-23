@@ -1,4 +1,3 @@
-
 #include <avr/io.h>
 #include <stdint.h>
 
@@ -10,7 +9,6 @@
 
 // Configuracion de seguridad
 #define TIMEOUT_ENLACE_MS 300UL
-#define LIMITE_LENTO_PCT 30U
 
 // Variables de estado
 static estado_robot_t estado = INICIO;
@@ -42,6 +40,10 @@ void robot_init(uint8_t reinicio_brownout)
     orden_mov = 0;
     porcentaje = 70;
 
+    enlace_visto = 0;
+	ultimo_paquete_ms = 0;
+	hubo_failsafe = 0;
+
     apagar_motores();
 
     estado = ESPERA_ENLACE;
@@ -66,41 +68,46 @@ void robot_recibir_trama(
         if (estado == ESPERA_ENLACE ||
             estado == FAILSAFE)
         {
-            estado = sensores_bateria_baja() ?
-                     BATERIA_BAJA : MANUAL;
-        }
+             if (sensores_bateria_baja())
+			{
+				estado = BATERIA_BAJA;
+			}
+			else
+			{
+				estado = MANUAL;
+			}
+		}
 
-        return;
-    }
-
-    // No aceptar movimiento sin estado habilitado
-    if (estado != MANUAL &&
-        estado != BATERIA_BAJA)
-    {
-        return;
-    }
+		return;
+	}
+    
+    // Solo aceptar comandos en modo MANUAL
+	if (estado != MANUAL)
+	{
+		return;
+	}
 
     // Comandos de movimiento
-    if (cmd >= 1 && cmd <= 4)
-    {
-        orden_mov = cmd;
-        porcentaje = valor;
-    }
-    // Cambio de velocidad
-    else if (cmd == 7)
-    {
-        porcentaje = valor;
-    }
-    // Abrir pinza
-    else if (cmd == 5 && estado == MANUAL)
-    {
-        agarre_abrir();
-    }
-    // Cerrar pinza
-    else if (cmd == 6 && estado == MANUAL)
-    {
-        agarre_cerrar();
-    }
+	if (cmd >= 1 && cmd <= 4)
+	{
+		orden_mov = cmd;
+		porcentaje = valor;
+	}
+	else if (cmd == 7)
+	{
+		// Cambiar velocidad
+		porcentaje = valor;
+	}
+	else if (cmd == 5)
+	{
+		// Abrir pinza
+		agarre_abrir();
+	}
+	else if (cmd == 6)
+	{
+		// Cerrar pinza
+		agarre_cerrar();
+	}
 }
 
 // Actualizar LED de estado
@@ -133,8 +140,7 @@ static void actualizar_led(uint32_t ahora)
 void robot_tarea(uint32_t ahora)
 {
     // Detectar perdida de comunicacion
-    if (enlace_visto &&
-        (uint32_t)(ahora - ultimo_paquete_ms)
+    if (enlace_visto && (uint32_t)(ahora - ultimo_paquete_ms)
             >= TIMEOUT_ENLACE_MS)
     {
         if (estado == MANUAL ||
@@ -147,53 +153,59 @@ void robot_tarea(uint32_t ahora)
     }
 
     // Verificar bateria
-    if (estado == MANUAL &&
-        sensores_bateria_baja())
+    if (estado == MANUAL && sensores_bateria_baja())
     {
         estado = BATERIA_BAJA;
+
+// Cancelar cualquier movimiento
+		orden_mov = 0;
+		apagar_motores();
     }
-    else if (estado == BATERIA_BAJA &&
-             !sensores_bateria_baja())
+    else if (estado == BATERIA_BAJA && !sensores_bateria_baja())
     {
         estado = MANUAL;
+        
+        // No reanudar movimientos anteriores
+		orden_mov = 0;
+		apagar_motores();
     }
 
     // Control de motores segun estado
-    if (estado == MANUAL ||
-        estado == BATERIA_BAJA)
+    if (estado == MANUAL)
     {
-        uint8_t pct = porcentaje;
+       // Convertir porcentaje a PWM
+		motores_velocidad((uint8_t)(((uint16_t)porcentaje * 255U) / 100U));
+    if (orden_mov == 1)
+		{
+			motores_avanzar();
+		}
+		else if (orden_mov == 2)
+		{
+			motores_retroceder();
+		}
+		else if (orden_mov == 3)
+		{
+			motores_izquierda();
+		}
+		else if (orden_mov == 4)
+		{
+			motores_derecha();
+		}
+		else
+		{
+			apagar_motores();
+		}
+	}
+	else
+	{
+		// En cualquier otro estado,
+		// mantener los motores detenidos
+		apagar_motores();
+	}
 
-        // Limitar velocidad por bateria baja
-        if (estado == BATERIA_BAJA &&
-            pct > LIMITE_LENTO_PCT)
-        {
-            pct = LIMITE_LENTO_PCT;
-        }
-
-        // Convertir porcentaje a PWM (0-255)
-        motores_velocidad(
-            (uint8_t)(((uint16_t)pct * 255U) / 100U)
-        );
-
-        if (orden_mov == 1)
-            motores_avanzar();
-        else if (orden_mov == 2)
-            motores_retroceder();
-        else if (orden_mov == 3)
-            motores_izquierda();
-        else if (orden_mov == 4)
-            motores_derecha();
-        else
-            apagar_motores();
-    }
-    else
-    {
-        apagar_motores();
-    }
-
-    actualizar_led(ahora);
+	actualizar_led(ahora);
 }
+       
 
 // Enviar telemetria de 5 bytes
 void robot_telemetria(void)
