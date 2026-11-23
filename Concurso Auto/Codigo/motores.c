@@ -2,56 +2,162 @@
 #include <avr/io.h>
 #include "motores.h"
 
-// =====================================
-// DEFINICION DE PINES DEL L298N
-// =====================================
+// Definicion de pines para el MX1508
 
 // Motor A (izquierdo)
-#define ENA PD5
-#define IN1 PD4
-#define IN2 PD7
+#define IN1 PD5   // D5 - PWM OC0B
+#define IN2 PD4   // D4 - Direccion
 
 // Motor B (derecho)
-#define ENB PD6
-#define IN3 PB0
-#define IN4 PB4
+#define IN3 PD6   // D6 - PWM OC0A
+#define IN4 PD7   // D7 - Direccion
 
-// =====================================
-// INICIALIZACION DE LOS MOTORES
-// =====================================
+#define PINES_MOTORES ((1 << IN1) | (1 << IN2) | \
+(1 << IN3) | (1 << IN4))
+
+// Control de velocidad 
+
+// Velocidad entre 0 y 255
+static uint8_t velocidad_actual = 0;
+
+// Ultima configuracion aplicada
+static int8_t ultima_dir_a = 0;
+static int8_t ultima_dir_b = 0;
+static uint8_t ultima_velocidad = 0;
+static uint8_t configurado = 0;
+
+// Direcciones:
+//  1 = Adelante
+// -1 = Atras
+//  0 = Detenido
+
+static void motores_aplicar(int8_t dir_a, int8_t dir_b)
+{
+	// Evitar reconfiguraciones innecesarias
+	if (configurado &&
+	dir_a == ultima_dir_a &&
+	dir_b == ultima_dir_b &&
+	velocidad_actual == ultima_velocidad)
+	{
+		return;
+	}
+
+	ultima_dir_a = dir_a;
+	ultima_dir_b = dir_b;
+	ultima_velocidad = velocidad_actual;
+	configurado = 1;
+
+	// Desconectar temporalmente salidas PWM
+	// Mantener Timer0 en Fast PWM
+	TCCR0A = (1 << WGM01) | (1 << WGM00);
+
+	// Dejar todas las entradas del MX1508 en bajo
+	PORTD &= ~PINES_MOTORES;
+	
+	OCR0B = velocidad_actual; // PWM motor izquierdo
+	OCR0A = velocidad_actual; // PWM motor derecho
+
+	// Velocidad cero: motores detenidos
+	if (velocidad_actual == 0)
+	{
+		return;
+	}
+
+//MOTOR A
+
+if (dir_a == 1)
+	{
+		// Adelante: IN1 PWM, IN2 bajo
+
+		if (velocidad_actual == 255)
+		{
+			PORTD |= (1 << IN1);
+		}
+		else
+		{
+			// PWM no inversor en OC0B
+			TCCR0A |= (1 << COM0B1);
+		}
+	}
+	else if (dir_a == -1)
+	{
+		// Atras: IN1 PWM inverso, IN2 alto
+		PORTD |= (1 << IN2);
+
+		if (velocidad_actual < 255)
+		{
+			// PWM inversor en OC0B
+			TCCR0A |= (1 << COM0B1) |
+			(1 << COM0B0);
+		}
+	}
+
+//MOTOR B
+
+if (dir_b == 1)
+	{
+		// Adelante: IN3 PWM, IN4 bajo
+
+		if (velocidad_actual == 255)
+		{
+			PORTD |= (1 << IN3);
+		}
+		else
+		{
+			// PWM no inversor en OC0A
+			TCCR0A |= (1 << COM0A1);
+		}
+	}
+	else if (dir_b == -1)
+	{
+		// Atras: IN3 PWM inverso, IN4 alto
+		PORTD |= (1 << IN4);
+
+		if (velocidad_actual < 255)
+		{
+			// PWM inversor en OC0A
+			TCCR0A |= (1 << COM0A1) |
+			(1 << COM0A0);
+		}
+	}
+}
+
 
 void motores_init(void)
 {
-    // Configurar pines como salidas
-    DDRD |= (1 << ENA) | (1 << IN1)
-          | (1 << IN2) | (1 << ENB);
+   // Desactivar Timer0 durante configuracion
+	TCCR0A = 0;
+	TCCR0B = 0;
 
-    DDRB |= (1 << IN3) | (1 << IN4);
+	// Entradas MX1508 inicialmente en bajo
+	PORTD &= ~PINES_MOTORES;
 
-      // Detener los motores inicialmente
-      motores_detener();
+	// Configurar los cuatro pines como salidas
+	DDRD |= PINES_MOTORES;
 
+	// PWM inicialmente en cero
+	OCR0A = 0;
+	OCR0B = 0;
+	TCNT0 = 0;
 
-    // Timer0 en modo Fast PWM
-    // PWM en PD5 (OC0B) y PD6 (OC0A)
-    TCCR0A = (1 << COM0A1) | (1 << COM0B1)
-           | (1 << WGM01) | (1 << WGM00);
+	// Timer0 en modo Fast PWM de 8 bits
+	TCCR0A = (1 << WGM01) |
+	(1 << WGM00);
 
-    // Prescaler de 64
-    TCCR0B = (1 << CS01) | (1 << CS00);
+	// Prescaler de 64
+	TCCR0B = (1 << CS01) |
+	(1 << CS00);
 
-    // Velocidad inicial aproximada: 70%
-    motores_velocidad(180);
-}
+	// Arrancar con motores detenidos
+	velocidad_actual = 0;
+	configurado = 0;
 
-// =====================================
-// CONTROL DE VELOCIDAD
-// =====================================
+	motores_detener();
 
 void motores_velocidad(uint8_t velocidad)
 {
-    OCR0A = velocidad;  // Motor B
-    OCR0B = velocidad;  // Motor A
+  // Guardar valor de PWM
+	velocidad_actual = velocidad;
 }
 
 // =====================================
@@ -60,11 +166,7 @@ void motores_velocidad(uint8_t velocidad)
 
 void motores_avanzar(void)
 {
-	PORTD &= ~((1 << IN1) | (1 << IN2));
-	PORTB &= ~((1 << IN3) | (1 << IN4));
-
-	PORTD |= (1 << IN1);
-	PORTB |= (1 << IN3);
+	motores_aplicar(1, 1);
 }
 
 
@@ -74,11 +176,7 @@ void motores_avanzar(void)
 
 void motores_retroceder(void)
 {
-	PORTD &= ~((1 << IN1) | (1 << IN2));
-	PORTB &= ~((1 << IN3) | (1 << IN4));
-
-	PORTD |= (1 << IN2);
-	PORTB |= (1 << IN4);
+	motores_aplicar(-1, -1);
 }
 
 // =====================================
@@ -94,6 +192,8 @@ void motores_izquierda(void)
 	// Motor derecho hacia adelante
 	PORTB &= ~((1 << IN3) | (1 << IN4));
 	PORTB |= (1 << IN3);
+
+	motores_aplicar(-1, 1);
 }
 
 // =====================================
@@ -109,6 +209,8 @@ void motores_derecha(void)
 	// Motor derecho hacia atras
 	PORTB &= ~((1 << IN3) | (1 << IN4));
 	PORTB |= (1 << IN4);
+
+	motores_aplicar(1, -1);
 }
 
 // =====================================
@@ -117,7 +219,6 @@ void motores_derecha(void)
 
 void motores_detener(void)
 {
-    PORTD &= ~((1 << IN1) | (1 << IN2));
-    PORTB &= ~((1 << IN3) | (1 << IN4));
+   motores_aplicar(0, 0);
 }
 
