@@ -2,6 +2,14 @@
 #include <stdint.h>
 #include "sensores.h"
 
+// Configuracion de Medicion 
+// Referencia ADC: 5 V nominales
+#define VREF_MV 5000UL
+
+// Divisor resistivo: 10k + 10k
+// El voltaje de A0 es la mitad del voltaje de la bateria.
+#define FACTOR_DIVISOR 2UL
+
 static uint8_t bateria_dv = 0;
 static uint8_t bateria_baja = 0;
 
@@ -32,27 +40,30 @@ void sensores_tarea(void)
 	{
 	}
 
-	uint16_t adc = ADC;
+	uint16_t lectura_adc = ADC;
 
-	// Ejemplo: divisor 10k / 4.7k, Vref=5 V
-	// Convertir a decivoltios
-	uint16_t decivoltios =
-	(uint16_t)(((uint32_t)adc * 1527UL)
-	/ 10000UL);
-
+	// Convertir ADC a milivoltios
+	uint32_t voltaje_mv = ((uint32_t)lectura_adc * VREF_MV *FACTOR_DIVISOR) / 1023UL;
+	
 	bateria_dv = (decivoltios > 255U) ?
 	255U : (uint8_t)decivoltios;
 
-	// Umbrales orientativos SOLO para bateria 2S.
-	// Deben adaptarse a la bateria real.
-	if (bateria_baja)
+		bateria_dv = (uint8_t)voltaje_dv;
+
+
+	if (bateria_baja == 0)
 	{
-		if (bateria_dv >= 68U)
-		bateria_baja = 0;
+		if (bateria_dv <= BATERIA_BAJA_DV)
+		{
+			bateria_baja = 1;
+		}
 	}
-	else if (bateria_dv <= 66U)
+	else
 	{
-		bateria_baja = 1;
+		if (bateria_dv >= BATERIA_RECUPERADA_DV)
+		{
+			bateria_baja = 0;
+		}
 	}
 
 	#endif
@@ -70,7 +81,7 @@ uint8_t sensores_bateria_baja(void)
 
 uint8_t sensores_objeto_agarrado(void)
 {
-	// Pendiente: final de carrera real.
+	// Todavia no implementado
 	return 0;
 }
 
