@@ -22,8 +22,7 @@ void comandos_init(void)
 
 // Verificar que el comando y su valor sean validos
 static uint8_t trama_semantica_valida(
-uint8_t cmd,
-uint8_t valor)
+uint8_t cmd, uint8_t valor)
 {
 	if (cmd > 7U)
 	return 0;
@@ -66,8 +65,7 @@ void comandos_procesar(uint32_t ahora)
 			etapa = 0;
 
 			if ((uint8_t)(cmd_actual ^ valor_actual) == b &&
-			trama_semantica_valida(cmd_actual,
-			valor_actual))
+			trama_semantica_valida(cmd_actual,valor_actual))
 			{
 				robot_recibir_trama(
 				cmd_actual,
