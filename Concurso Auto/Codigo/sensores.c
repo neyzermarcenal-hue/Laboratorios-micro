@@ -27,6 +27,9 @@ void sensores_init(void)
 	(1 << ADPS0);
 
 	#endif
+
+	DDRD &= ~(1 << PD2);
+	PORTD |= (1 << PD2);
 }
 
 void sensores_tarea(void)
@@ -81,7 +84,10 @@ uint8_t sensores_bateria_baja(void)
 
 uint8_t sensores_objeto_agarrado(void)
 {
-	// Todavia no implementado
-	return 0;
+	if (!(PIND & (1 << PD2)))
+	{
+		return 1; // Objeto detectado
+	}
+	return 0; // Sin objeto
 }
 
