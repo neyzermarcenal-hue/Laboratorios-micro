@@ -12,6 +12,9 @@
 
 static uint8_t bateria_dv = 0;
 static uint8_t bateria_baja = 0;
+static uint8_t objeto_estable = 0;
+static uint8_t ultima_muestra = 0;
+static uint8_t muestras_iguales = 0;
 
 void sensores_init(void)
 {
@@ -70,6 +73,30 @@ void sensores_tarea(void)
 	}
 
 	#endif
+
+	
+    // Leer pulsador de la garra (D2)
+    uint8_t muestra = !(PIND & (1 << PD2));
+
+    if (muestra == ultima_muestra)
+    {
+        if (muestras_iguales < 2)
+        {
+            muestras_iguales++;
+        }
+    }
+    else
+    {
+        ultima_muestra = muestra;
+        muestras_iguales = 1;
+    }
+
+    // Confirmar despues de dos lecturas iguales
+    if (muestras_iguales >= 2)
+    {
+        objeto_estable = muestra;
+    }
+
 }
 
 uint8_t sensores_bateria_dv(void)
@@ -84,10 +111,6 @@ uint8_t sensores_bateria_baja(void)
 
 uint8_t sensores_objeto_agarrado(void)
 {
-	if (!(PIND & (1 << PD2)))
-	{
-		return 1; // Objeto detectado
-	}
-	return 0; // Sin objeto
+    return objeto_estable;
 }
 
