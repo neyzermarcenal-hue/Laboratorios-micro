@@ -6,6 +6,7 @@
 #include "agarre.h"
 #include "sensores.h"
 #include "bluetooth.h"
+#include "seguridad.h"
 
 // Configuracion de seguridad
 #define TIMEOUT_ENLACE_MS 300UL
